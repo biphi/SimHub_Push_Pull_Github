@@ -89,7 +89,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: msbuild $env:PROJECT_PATH /p:Configuration=$env:BUILD_CONFIG /p:Platform="Any CPU" /m /verbosity:minimal
+        run: msbuild $env:PROJECT_PATH /p:Configuration=$env:BUILD_CONFIG /m /verbosity:minimal
 
       - name: Determine version
         id: version
