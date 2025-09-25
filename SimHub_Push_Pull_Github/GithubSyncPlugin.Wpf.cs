@@ -19,16 +19,18 @@ namespace SimHub_Push_Pull_Github
 {
     public partial class GithubSyncPlugin : IWPFSettingsV2
     {
-        public string LeftMenuTitle => Name;
+        public string LeftMenuTitle => _settings?.RemoteUrl != null ? $"Git Sync" : typeof(GithubSyncPlugin).Name;
         public ImageSource PictureIcon => null;
         public Control GetWPFSettingsControl(PluginManager pluginManager) => new SettingsControl(this, _settings);
 
         private class SettingsControl : UserControl
         {
-            // ... unveränderte Felder oben ...
             private readonly GithubSyncPlugin _plugin;
             private readonly PluginSettings _settings;
+            // UI + State Felder (Original wiederhergestellt)
             private TextBox _pathBox; private ListView _dashboardsList; private ListView _remoteList; private TextBox _logText; private CheckBox _autoScrollCheck; private FileSystemWatcher _logWatcher; private TextBox _localFilterBox; private TextBox _remoteFilterBox; private bool _initialDashboardsLoaded; private readonly ObservableCollection<DashboardRow> _localRows = new ObservableCollection<DashboardRow>(); private readonly ObservableCollection<DashboardRow> _remoteRows = new ObservableCollection<DashboardRow>(); private bool _isBusy; private TextBlock _statusText; private Panel _actionsButtonsPanel; private ProgressBar _progressBar; private TextBlock _remoteRepoLinkContainer; private Hyperlink _remoteRepoHyperlink;
+            // Version UI
+            private TextBlock _versionText; private Button _updateButton;
 
             // Farbpalette
             private static readonly Color PrimaryColor = Color.FromRgb(0x1E, 0x88, 0xE5); // Blau
@@ -42,42 +44,21 @@ namespace SimHub_Push_Pull_Github
 
             private class DashboardRow : INotifyPropertyChanged { private bool _isChecked; public string Name { get; set; } public DateTime? LastWriteUtc { get; set; } public bool IsChecked { get { return _isChecked; } set { if (_isChecked != value) { _isChecked = value; OnPropertyChanged("IsChecked"); } } } public string DateDisplay { get { return LastWriteUtc.HasValue ? LastWriteUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "n/a"; } } public event PropertyChangedEventHandler PropertyChanged; private void OnPropertyChanged(string p) { var h = PropertyChanged; if (h != null) { try { h(this, new PropertyChangedEventArgs(p)); } catch { } } } }
 
-            public SettingsControl(GithubSyncPlugin plugin, PluginSettings settings) { _plugin = plugin; _settings = settings ?? new PluginSettings(); BuildUi(); }
-
-            private Button CreateStyledButton(string text, RoutedEventHandler onClick, Color baseColor, Color hoverColor, string tooltip = null, bool bold = false, bool danger = false, double minWidth = 100)
+            public SettingsControl(GithubSyncPlugin plugin, PluginSettings settings)
             {
-                var btn = new Button
-                {
-                    Content = text,
-                    Margin = new Thickness(6, 4, 0, 4),
-                    Padding = new Thickness(14, 6, 14, 6),
-                    Background = new SolidColorBrush(baseColor),
-                    Foreground = Brushes.White,
-                    BorderBrush = new SolidColorBrush(Colors.WhiteSmoke),
-                    BorderThickness = new Thickness(1),
-                    Cursor = Cursors.Hand,
-                    FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-                    MinWidth = minWidth,
-                    ToolTip = tooltip,
-                    Effect = new DropShadowEffect { BlurRadius = 4, Direction = 270, ShadowDepth = 2, Opacity = 0.35, Color = Colors.Black }
-                };
-                btn.Click += onClick;
-                btn.MouseEnter += (s, e) => { ((Button)s).Background = new SolidColorBrush(hoverColor); };
-                btn.MouseLeave += (s, e) => { ((Button)s).Background = new SolidColorBrush(baseColor); };
-                btn.IsEnabledChanged += (s, e) =>
-                {
-                    var b = (Button)s;
-                    if (b.IsEnabled)
-                    {
-                        b.Opacity = 1.0; b.Background = new SolidColorBrush(baseColor);
-                    }
-                    else
-                    {
-                        b.Opacity = .55; b.Background = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
-                    }
-                };
-                return btn;
+                _plugin = plugin; _settings = settings ?? new PluginSettings();
+                _plugin.VersionInfoChanged += OnVersionInfoChanged;
+                BuildUi();
+                UpdateVersionUi();
             }
+
+            private void OnVersionInfoChanged() { try { Dispatcher.Invoke(UpdateVersionUi); } catch { } }
+            private void UpdateVersionUi() { if (_versionText != null) _versionText.Text = "Version: v" + (_plugin?.CurrentVersion ?? "?"); if (_updateButton != null) { _updateButton.Visibility = (_plugin?.UpdateAvailable == true) ? Visibility.Visible : Visibility.Collapsed; _updateButton.ToolTip = _plugin?.UpdateAvailable == true ? ($"New version v{_plugin.LatestRemoteVersion} available") : string.Empty; } }
+            private Button CreateUpdateButton() { var b = new Button { Content = "Update", Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 2, 10, 2), Background = new SolidColorBrush(DangerColor), Foreground = Brushes.White, Cursor = Cursors.Hand, Visibility = Visibility.Collapsed }; b.Click += (s, e) => { try { var url = _plugin?.LatestReleaseUrl ?? $"https://github.com/mzluzifer/SimHub_Push_Pull_Github/releases"; Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }; return b; }
+
+            // Button Styling Helpers (Original)
+            private Button CreateStyledButton(string text, RoutedEventHandler onClick, Color baseColor, Color hoverColor, string tooltip = null, bool bold = false, bool danger = false, double minWidth = 100)
+            { var btn = new Button { Content = text, Margin = new Thickness(6, 4, 0, 4), Padding = new Thickness(14, 6, 14, 6), Background = new SolidColorBrush(baseColor), Foreground = Brushes.White, BorderBrush = new SolidColorBrush(Colors.WhiteSmoke), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, MinWidth = minWidth, ToolTip = tooltip, Effect = new DropShadowEffect { BlurRadius = 4, Direction = 270, ShadowDepth = 2, Opacity = 0.35, Color = Colors.Black } }; btn.Click += onClick; btn.MouseEnter += (s, e) => { ((Button)s).Background = new SolidColorBrush(hoverColor); }; btn.MouseLeave += (s, e) => { ((Button)s).Background = new SolidColorBrush(baseColor); }; btn.IsEnabledChanged += (s, e) => { var b = (Button)s; if (b.IsEnabled) { b.Opacity = 1.0; b.Background = new SolidColorBrush(baseColor); } else { b.Opacity = .55; b.Background = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90)); } }; return btn; }
             private Button Primary(string text, RoutedEventHandler h, string tip = null) => CreateStyledButton(text, h, PrimaryColor, PrimaryHover, tip, true);
             private Button Accent(string text, RoutedEventHandler h, string tip = null) => CreateStyledButton(text, h, AccentColor, AccentHover, tip, true);
             private Button Danger(string text, RoutedEventHandler h, string tip = null) => CreateStyledButton(text, h, DangerColor, DangerHover, tip, true);
@@ -85,9 +66,18 @@ namespace SimHub_Push_Pull_Github
 
             private void BuildUi()
             {
+                var root = new DockPanel { LastChildFill = true };
+
+                var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 8, 0) };
+                _versionText = new TextBlock { FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+                _updateButton = CreateUpdateButton();
+                headerPanel.Children.Add(_versionText); headerPanel.Children.Add(_updateButton);
+                DockPanel.SetDock(headerPanel, Dock.Top);
+                root.Children.Add(headerPanel);
+
                 var tabs = new TabControl { Margin = new Thickness(8) };
 
-                // Git Tab
+                // === Original UI (leicht gekürzt) ===
                 var gitStack = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 4) };
                 var gitGroup = new GroupBox { Header = "Git Settings", Margin = new Thickness(0, 0, 0, 8) };
                 var gitPanel = new StackPanel { Orientation = Orientation.Vertical };
@@ -102,48 +92,18 @@ namespace SimHub_Push_Pull_Github
                 var tokenLabel = new TextBlock { Text = "Git Token/Password", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
                 var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 180 };
                 credPanel.Children.Add(userLabel); credPanel.Children.Add(userBox); credPanel.Children.Add(tokenLabel); credPanel.Children.Add(tokenBox);
-                var saveBtn = Primary("Save Settings", async (s, e) =>
-                {
-                    var selected = _localRows.Where(r => r.IsChecked).Select(r => r.Name).ToArray();
-                    var url = urlBox.Text; var branch = branchBox.Text; var ap = autoPull.IsChecked == true; var path = _pathBox != null ? _pathBox.Text : null; var user = userBox.Text; var token = tokenBox.Password;
-                    await RunBackground("Saving settings", delegate { _plugin.SaveSettings(url, branch, ap, path, selected, user, token); }, false);
-                    UpdateRemoteRepoHyperlink(url);
-                    await ReloadListsAsync(url, branch);
-                }, "Speichert URL, Branch und Zugangsdaten");
-                gitPanel.Children.Add(urlLabel);
-                gitPanel.Children.Add(urlBox);
-                gitPanel.Children.Add(branchLabel);
-                gitPanel.Children.Add(branchBox);
-                gitPanel.Children.Add(autoPull);
-                gitPanel.Children.Add(credPanel);
-                gitPanel.Children.Add(saveBtn);
-                gitGroup.Content = gitPanel;
-                gitStack.Children.Add(gitGroup);
-                var gitTab = new TabItem { Header = "Git-Settings", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+                var saveBtn = Primary("Save Settings", async (s, e) => { var selected = _localRows.Where(r => r.IsChecked).Select(r => r.Name).ToArray(); var url = urlBox.Text; var branch = branchBox.Text; var ap = autoPull.IsChecked == true; var path = _pathBox != null ? _pathBox.Text : null; var user = userBox.Text; var token = tokenBox.Password; await RunBackground("Saving settings", delegate { _plugin.SaveSettings(url, branch, ap, path, selected, user, token); }, false); UpdateRemoteRepoHyperlink(url); await ReloadListsAsync(url, branch); }, "Speichert URL, Branch und Zugangsdaten");
+                gitPanel.Children.Add(urlLabel); gitPanel.Children.Add(urlBox); gitPanel.Children.Add(branchLabel); gitPanel.Children.Add(branchBox); gitPanel.Children.Add(autoPull); gitPanel.Children.Add(credPanel); gitPanel.Children.Add(saveBtn); gitGroup.Content = gitPanel; gitStack.Children.Add(gitGroup); var gitTab = new TabItem { Header = "Git-Settings", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
-                // Dashboards Tab
                 var dashStack = new StackPanel { Orientation = Orientation.Vertical };
-                // Local
                 var localGroup = new GroupBox { Header = "Local Dashboards", Margin = new Thickness(0, 0, 0, 8) };
                 var localPanel = new StackPanel { Orientation = Orientation.Vertical };
                 localPanel.Children.Add(new TextBlock { Text = "Dashboards path" });
                 var pathPanel = new StackPanel { Orientation = Orientation.Horizontal };
                 _pathBox = new TextBox { Text = string.IsNullOrWhiteSpace(_settings.DashboardsPath) ? GetDefaultDashboardsPath() : _settings.DashboardsPath, MinWidth = 420 };
-                var browseBtn = Neutral("Browse", async (s, e) =>
-                {
-                    if (!TrySelectFolderViaReflection())
-                    {
-                        var ofd = new OpenFileDialog { CheckFileExists = true, Multiselect = false, Title = "Select any file inside the desired folder (fallback)", InitialDirectory = Directory.Exists(_pathBox.Text) ? _pathBox.Text : GetDefaultDashboardsPath(), Filter = "All files (*.*)|*.*" };
-                        if (ofd.ShowDialog() == true)
-                        {
-                            var dir = Path.GetDirectoryName(ofd.FileName);
-                            if (!string.IsNullOrWhiteSpace(dir)) { _pathBox.Text = dir; _initialDashboardsLoaded = false; await RunBackground("Loading dashboards", LoadDashboardsListInternal, false); }
-                        }
-                    }
-                }, "Ordner wählen");
+                var browseBtn = Neutral("Browse", async (s, e) => { if (!TrySelectFolderViaReflection()) { var ofd = new OpenFileDialog { CheckFileExists = true, Multiselect = false, Title = "Select any file inside the desired folder (fallback)", InitialDirectory = Directory.Exists(_pathBox.Text) ? _pathBox.Text : GetDefaultDashboardsPath(), Filter = "All files (*.*)|*.*" }; if (ofd.ShowDialog() == true) { var dir = Path.GetDirectoryName(ofd.FileName); if (!string.IsNullOrWhiteSpace(dir)) { _pathBox.Text = dir; _initialDashboardsLoaded = false; await RunBackground("Loading dashboards", LoadDashboardsListInternal, false); } } } }, "Ordner wählen");
                 var openPathBtn = Neutral("Open", (s, e) => { try { if (Directory.Exists(_pathBox.Text)) Process.Start("explorer.exe", _pathBox.Text); } catch { } }, "Ordner im Explorer öffnen");
-                pathPanel.Children.Add(_pathBox); pathPanel.Children.Add(browseBtn); pathPanel.Children.Add(openPathBtn);
-                localPanel.Children.Add(pathPanel);
+                pathPanel.Children.Add(_pathBox); pathPanel.Children.Add(browseBtn); pathPanel.Children.Add(openPathBtn); localPanel.Children.Add(pathPanel);
                 var localHeader = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
                 var refreshLocal = Primary("Refresh", async (s, e) => await RunBackground("Refreshing local", LoadDashboardsListInternal, false), "Lokale Liste neu laden");
                 var selectAllLocal = Accent("All", (s, e) => SelectAllLocal(true), "Alle auswählen");
@@ -152,17 +112,10 @@ namespace SimHub_Push_Pull_Github
                 _localFilterBox.TextChanged += async (s, e) => await RunBackground("Filtering", LoadDashboardsListInternal, false);
                 localHeader.Children.Add(refreshLocal); localHeader.Children.Add(selectAllLocal); localHeader.Children.Add(selectNoneLocal); localHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); localHeader.Children.Add(_localFilterBox);
                 localPanel.Children.Add(localHeader);
-                _dashboardsList = CreateListView(); _dashboardsList.ItemsSource = _localRows; localPanel.Children.Add(_dashboardsList);
-                localGroup.Content = localPanel; dashStack.Children.Add(localGroup);
+                _dashboardsList = CreateListView(); _dashboardsList.ItemsSource = _localRows; localPanel.Children.Add(_dashboardsList); localGroup.Content = localPanel; dashStack.Children.Add(localGroup);
 
-                // Remote
-                var remoteGroup = new GroupBox { Header = "Remote Dashboards (GitHub)", Margin = new Thickness(0, 0, 0, 8) };
-                var remotePanel = new StackPanel { Orientation = Orientation.Vertical };
-                _remoteRepoLinkContainer = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-                _remoteRepoHyperlink = new Hyperlink(new Run("<none>"));
-                _remoteRepoHyperlink.RequestNavigate += (s, e) => { try { if (_remoteRepoHyperlink.NavigateUri != null) Process.Start(new ProcessStartInfo(_remoteRepoHyperlink.NavigateUri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; };
-                _remoteRepoLinkContainer.Inlines.Add(new Run("Repository: ")); _remoteRepoLinkContainer.Inlines.Add(_remoteRepoHyperlink);
-                remotePanel.Children.Add(_remoteRepoLinkContainer);
+                var remoteGroup = new GroupBox { Header = "Remote Dashboards (GitHub)", Margin = new Thickness(0, 0, 0, 8) }; var remotePanel = new StackPanel { Orientation = Orientation.Vertical };
+                _remoteRepoLinkContainer = new TextBlock { Margin = new Thickness(0, 0, 0, 4) }; _remoteRepoHyperlink = new Hyperlink(new Run("<none>")); _remoteRepoHyperlink.RequestNavigate += (s, e) => { try { if (_remoteRepoHyperlink.NavigateUri != null) Process.Start(new ProcessStartInfo(_remoteRepoHyperlink.NavigateUri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; _remoteRepoLinkContainer.Inlines.Add(new Run("Repository: ")); _remoteRepoLinkContainer.Inlines.Add(_remoteRepoHyperlink); remotePanel.Children.Add(_remoteRepoLinkContainer);
                 var remoteHeader = new StackPanel { Orientation = Orientation.Horizontal };
                 var refreshRemote = Primary("Refresh", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Refreshing remote", delegate { LoadRemoteListInternal(u, b); }, false); }, "Remote repos neu laden");
                 var selectAllRemote = Accent("All", (s, e) => SelectAllRemote(true), "Alle auswählen");
@@ -170,62 +123,25 @@ namespace SimHub_Push_Pull_Github
                 _remoteFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter (name contains)", VerticalAlignment = VerticalAlignment.Center };
                 _remoteFilterBox.TextChanged += async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Filtering remote", delegate { LoadRemoteListInternal(u, b); }, false); };
                 remoteHeader.Children.Add(refreshRemote); remoteHeader.Children.Add(selectAllRemote); remoteHeader.Children.Add(selectNoneRemote); remoteHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); remoteHeader.Children.Add(_remoteFilterBox);
-                remotePanel.Children.Add(remoteHeader);
-                _remoteList = CreateListView(); _remoteList.ItemsSource = _remoteRows; remotePanel.Children.Add(_remoteList);
-                remoteGroup.Content = remotePanel; dashStack.Children.Add(remoteGroup);
+                remotePanel.Children.Add(remoteHeader); _remoteList = CreateListView(); _remoteList.ItemsSource = _remoteRows; remotePanel.Children.Add(_remoteList); remoteGroup.Content = remotePanel; dashStack.Children.Add(remoteGroup);
                 urlBox.TextChanged += (s, e) => UpdateRemoteRepoHyperlink(urlBox.Text); UpdateRemoteRepoHyperlink(urlBox.Text);
 
-                // Actions
-                var actionsGroup = new GroupBox { Header = "Actions", Margin = new Thickness(0, 0, 0, 8) };
-                var buttonsPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) }; _actionsButtonsPanel = buttonsPanel;
-                var pullBtn = Primary("Pull", async (s, e) => await RunBackground("Pull", _plugin.GitPull, false));
-                var pushBtn = Accent("Push", async (s, e) => await RunBackground("Push", _plugin.GitPush, false));
-                var commitBtn = Neutral("Commit", async (s, e) => await RunBackground("Commit", _plugin.GitCommitAll, false));
-                var downloadBtn = Primary("Download", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Download", delegate { DownloadSelectedInternal(u, b); }, false); });
-                buttonsPanel.Children.Add(pullBtn); buttonsPanel.Children.Add(pushBtn); buttonsPanel.Children.Add(commitBtn); buttonsPanel.Children.Add(downloadBtn);
-                actionsGroup.Content = buttonsPanel; dashStack.Children.Add(actionsGroup);
+                var actionsGroup = new GroupBox { Header = "Actions", Margin = new Thickness(0, 0, 0, 8) }; var buttonsPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) }; _actionsButtonsPanel = buttonsPanel; var pullBtn = Primary("Pull", async (s, e) => await RunBackground("Pull", _plugin.GitPull, false)); var pushBtn = Accent("Push", async (s, e) => await RunBackground("Push", _plugin.GitPush, false)); var commitBtn = Neutral("Commit", async (s, e) => await RunBackground("Commit", _plugin.GitCommitAll, false)); var downloadBtn = Primary("Download", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Download", delegate { DownloadSelectedInternal(u, b); }, false); }); buttonsPanel.Children.Add(pullBtn); buttonsPanel.Children.Add(pushBtn); buttonsPanel.Children.Add(commitBtn); buttonsPanel.Children.Add(downloadBtn); actionsGroup.Content = buttonsPanel; dashStack.Children.Add(actionsGroup);
 
-                // Status
-                var statusPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
-                _statusText = new TextBlock { Text = "Ready", VerticalAlignment = VerticalAlignment.Center };
-                _progressBar = new ProgressBar { Width = 140, Height = 16, Margin = new Thickness(12, 0, 0, 0), Visibility = Visibility.Collapsed, IsIndeterminate = false };
-                statusPanel.Children.Add(_statusText); statusPanel.Children.Add(_progressBar);
-                dashStack.Children.Add(statusPanel);
-                var dashTab = new TabItem { Header = "Dashboards", Content = new ScrollViewer { Content = dashStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+                var statusPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) }; _statusText = new TextBlock { Text = "Ready", VerticalAlignment = VerticalAlignment.Center }; _progressBar = new ProgressBar { Width = 140, Height = 16, Margin = new Thickness(12, 0, 0, 0), Visibility = Visibility.Collapsed, IsIndeterminate = false }; statusPanel.Children.Add(_statusText); statusPanel.Children.Add(_progressBar); dashStack.Children.Add(statusPanel); var dashTab = new TabItem { Header = "Dashboards", Content = new ScrollViewer { Content = dashStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
-                // Logs Tab
-                var logsStack = new StackPanel { Orientation = Orientation.Vertical };
-                var logsGroup = new GroupBox { Header = "Logs" };
-                var logsPanel = new StackPanel { Orientation = Orientation.Vertical };
-                var logsHeader = new StackPanel { Orientation = Orientation.Horizontal };
-                var refreshLogs = Neutral("Refresh", (s, e) => LoadLogs(), "Logs neu laden");
-                var clearLogs = Danger("Clear", (s, e) => ClearLogs(), "Logdatei löschen");
-                _autoScrollCheck = new CheckBox { Content = "Auto-scroll", IsChecked = true, Margin = new Thickness(12, 4, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-                logsHeader.Children.Add(refreshLogs); logsHeader.Children.Add(clearLogs); logsHeader.Children.Add(_autoScrollCheck);
-                logsPanel.Children.Add(logsHeader);
-                _logText = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, VerticalScrollBarVisibility = ScrollBarVisibility.Visible, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, MinWidth = 620, Height = 520, FontFamily = new FontFamily("Consolas"), FontSize = 12 };
-                logsPanel.Children.Add(_logText); logsGroup.Content = logsPanel; logsStack.Children.Add(logsGroup);
-                var logsTab = new TabItem { Header = "Logs", Content = new ScrollViewer { Content = logsStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+                var logsStack = new StackPanel { Orientation = Orientation.Vertical }; var logsGroup = new GroupBox { Header = "Logs" }; var logsPanel = new StackPanel { Orientation = Orientation.Vertical }; var logsHeader = new StackPanel { Orientation = Orientation.Horizontal }; var refreshLogs = Neutral("Refresh", (s, e) => LoadLogs(), "Logs neu laden"); var clearLogs = Danger("Clear", (s, e) => ClearLogs(), "Logdatei löschen"); _autoScrollCheck = new CheckBox { Content = "Auto-scroll", IsChecked = true, Margin = new Thickness(12, 4, 0, 4), VerticalAlignment = VerticalAlignment.Center }; logsHeader.Children.Add(refreshLogs); logsHeader.Children.Add(clearLogs); logsHeader.Children.Add(_autoScrollCheck); logsPanel.Children.Add(logsHeader); _logText = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, VerticalScrollBarVisibility = ScrollBarVisibility.Visible, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, MinWidth = 620, Height = 520, FontFamily = new FontFamily("Consolas"), FontSize = 12 }; logsPanel.Children.Add(_logText); logsGroup.Content = logsPanel; logsStack.Children.Add(logsGroup); var logsTab = new TabItem { Header = "Logs", Content = new ScrollViewer { Content = logsStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
-                // Support Tab (unverändert abgesehen von Formatierung)
-                var supportStack = new StackPanel { Orientation = Orientation.Vertical };
-                supportStack.Children.Add(new TextBlock { Text = "Support & Contact", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-                supportStack.Children.Add(new TextBlock { Text = "Join my Discord! If you have questions or comments let me know. Thanks in advance!", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
-                var linkText = new TextBlock(); linkText.Inlines.Add(new Run("Discord: ")); var discordLink = new Hyperlink(new Run("https://discord.gg/WSy8G4UhjC")) { NavigateUri = new Uri("https://discord.gg/WSy8G4UhjC") }; discordLink.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkText.Inlines.Add(discordLink); supportStack.Children.Add(linkText);
-                var linkTreeText = new TextBlock { Margin = new Thickness(0, 4, 0, 0) }; linkTreeText.Inlines.Add(new Run("Linktree: ")); var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer") }; linkTree.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkTreeText.Inlines.Add(linkTree); supportStack.Children.Add(linkTreeText);
-                supportStack.Children.Add(new TextBlock { Margin = new Thickness(0, 10, 0, 0), Text = "Thank you for your support! Greeting MZLuzifer ??", TextWrapping = TextWrapping.Wrap });
-                var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+                var supportStack = new StackPanel { Orientation = Orientation.Vertical }; supportStack.Children.Add(new TextBlock { Text = "Support & Contact", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) }); supportStack.Children.Add(new TextBlock { Text = "Join my Discord! If you have questions or comments let me know. Thanks in advance!", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) }); var linkText = new TextBlock(); linkText.Inlines.Add(new Run("Discord: ")); var discordLink = new Hyperlink(new Run("https://discord.gg/WSy8G4UhjC")) { NavigateUri = new Uri("https://discord.gg/WSy8G4UhjC") }; discordLink.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkText.Inlines.Add(discordLink); supportStack.Children.Add(linkText); var linkTreeText = new TextBlock { Margin = new Thickness(0, 4, 0, 0) }; linkTreeText.Inlines.Add(new Run("Linktree: ")); var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer") }; linkTree.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkTreeText.Inlines.Add(linkTree); supportStack.Children.Add(linkTreeText); supportStack.Children.Add(new TextBlock { Margin = new Thickness(0, 10, 0, 0), Text = "Thank you for your support! Greeting MZLuzifer ??", TextWrapping = TextWrapping.Wrap }); var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 tabs.Items.Add(dashTab); tabs.Items.Add(gitTab); tabs.Items.Add(logsTab); tabs.Items.Add(supportTab);
-                Content = tabs;
+                root.Children.Add(tabs);
+                Content = root;
 
-                var initUrl = urlBox.Text; var initBranch = branchBox.Text;
-                _ = RunBackground("Initial load", delegate { LoadDashboardsListInternal(); LoadRemoteListInternal(initUrl, initBranch); LoadLogs(); }, false);
-                StartLogWatcher();
-                Unloaded += (s, e) => StopLogWatcher();
+                var initUrl = urlBox.Text; var initBranch = branchBox.Text; _ = RunBackground("Initial load", delegate { LoadDashboardsListInternal(); LoadRemoteListInternal(initUrl, initBranch); LoadLogs(); }, false); StartLogWatcher(); Unloaded += (s, e) => StopLogWatcher();
             }
 
-            // === Ab hier bestehende Methoden aus vorheriger Version (unverändert) ===
+            // Restliche Methoden unverändert (siehe ursprüngliche Version) – bereits unterhalb vorhanden.
             private void UpdateRemoteRepoHyperlink(string remoteUrl) { try { if (_remoteRepoHyperlink == null) return; if (string.IsNullOrWhiteSpace(remoteUrl)) { _remoteRepoHyperlink.NavigateUri = null; _remoteRepoHyperlink.Inlines.Clear(); _remoteRepoHyperlink.Inlines.Add(new Run("<none>")); return; } var url = NormalizeRemoteUrlToWeb(remoteUrl); _remoteRepoHyperlink.NavigateUri = new Uri(url); _remoteRepoHyperlink.Inlines.Clear(); _remoteRepoHyperlink.Inlines.Add(new Run(url)); } catch { } }
             private string NormalizeRemoteUrlToWeb(string remote) { try { if (string.IsNullOrWhiteSpace(remote)) return remote; var r = remote.Trim(); if (r.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase)) { r = r.Substring("git@github.com:".Length); if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return "https://github.com/" + r; } if (r.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || r.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) { if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } catch { return remote; } }
             private void SetBusy(bool busy, string message) { _isBusy = busy; if (_statusText != null) _statusText.Text = message; if (_actionsButtonsPanel != null) foreach (UIElement child in _actionsButtonsPanel.Children) child.IsEnabled = !busy; if (_progressBar != null) { _progressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed; _progressBar.IsIndeterminate = busy; } }

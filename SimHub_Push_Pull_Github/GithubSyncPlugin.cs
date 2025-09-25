@@ -12,14 +12,19 @@ namespace SimHub_Push_Pull_Github
 {
     public partial class GithubSyncPlugin : IPlugin
     {
+        public PluginManager PluginManager { get; set; } // implement interface with public setter
         private static Version _assemblyVersion;
         private static string _computedVersion;
         private static string _repoOwner = "mzluzifer"; // falls Fork bitte anpassen
         private static string _repoName = "SimHub_Push_Pull_Github";
-
-        public string Name => $"GitHub Dashboard Sync v{_computedVersion}";
-        public string Author => "GitHub Copilot";
-        public PluginManager PluginManager { get; set; }
+        private string _latestRemoteVersion;
+        private string _latestRemoteUrl;
+        private bool _updateAvailable;
+        public event Action VersionInfoChanged;
+        public string CurrentVersion => _computedVersion;
+        public bool UpdateAvailable => _updateAvailable;
+        public string LatestRemoteVersion => _latestRemoteVersion;
+        public string LatestReleaseUrl => _latestRemoteUrl;
 
         private static void ComputeBaseVersion()
         {
@@ -164,34 +169,38 @@ namespace SimHub_Push_Pull_Github
             try
             {
                 var current = _computedVersion;
-                using (var http = new HttpClient())
+                using (var http = new System.Net.Http.HttpClient())
                 {
                     http.DefaultRequestHeaders.UserAgent.ParseAdd("SimHubGithubSync/" + current);
                     var url = $"https://api.github.com/repos/{_repoOwner}/{_repoName}/releases/latest";
                     var json = await http.GetStringAsync(url).ConfigureAwait(false);
-                    // crude parse for tag_name
                     var tagMatch = Regex.Match(json, "\\\"tag_name\\\"\\s*:\\s*\\\"(?<tag>[^\\\"]+)\\\"", RegexOptions.IgnoreCase);
                     if (tagMatch.Success)
                     {
                         var tag = tagMatch.Groups["tag"].Value.Trim();
+                        _latestRemoteUrl = $"https://github.com/{_repoOwner}/{_repoName}/releases/latest";
                         if (tag.StartsWith("v")) tag = tag.Substring(1);
                         if (VersionPattern.IsMatch(tag))
                         {
+                            _latestRemoteVersion = tag;
                             if (TryParseVersion(tag, out var latest) && TryParseVersion(current, out var cur) && latest > cur)
                             {
+                                _updateAvailable = true;
                                 PluginLogger.Warn($"A newer plugin version v{latest} is available (current v{cur}).");
                             }
                             else
                             {
+                                _updateAvailable = false;
                                 PluginLogger.Info($"You are on the latest version (v{current}).");
                             }
+                            try { VersionInfoChanged?.Invoke(); } catch { }
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                PluginLogger.Debug("Update check failed: " + ex.Message);
+				PluginLogger.Debug("Update check failed: " + ex.Message);
             }
         }
 
