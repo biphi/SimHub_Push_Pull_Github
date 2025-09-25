@@ -35,16 +35,28 @@ jobs:
         run: msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
         shell: pwsh
 
+      - name: List output directories (diagnostic)
+        run: |
+          Write-Host 'Workspace:' (Get-Location)
+          Write-Host 'Top level:'; Get-ChildItem -Name
+          Write-Host 'Project dir:'; Get-ChildItem SimHub_Push_Pull_Github -Name
+          Write-Host 'Bin/Release contents:'
+          if (Test-Path SimHub_Push_Pull_Github/bin/Release) { Get-ChildItem SimHub_Push_Pull_Github/bin/Release } else { Write-Warning 'Release dir missing' }
+        shell: pwsh
+
       - name: Collect artifacts
         run: |
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
-          $outDir = 'SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release'
+          $outDir = 'SimHub_Push_Pull_Github/bin/Release'  # korrigiert
           if (Test-Path $outDir) {
-            Copy-Item "$outDir/SimHub_Push_Pull_Github.*" artifact -ErrorAction SilentlyContinue
+            Get-ChildItem $outDir -Filter SimHub_Push_Pull_Github.dll -Recurse | ForEach-Object { Copy-Item $_.FullName artifact/ }
+            Get-ChildItem $outDir -Filter SimHub_Push_Pull_Github.pdb -Recurse | ForEach-Object { Copy-Item $_.FullName artifact/ -ErrorAction SilentlyContinue }
             if (Test-Path "$outDir/lib") { robocopy "$outDir/lib" artifact/lib /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null }
           } else { Write-Warning "Output directory not found: $outDir" }
-          # Garantiert mindestens eine Datei, sonst scheitert Upload
-          if (-not (Get-ChildItem artifact -Recurse | Where-Object { -not $_.PSIsContainer })) { 'NO_BUILD_OUTPUT' | Out-File artifact/placeholder.txt }
+          if (-not (Get-ChildItem artifact -Recurse | Where-Object { -not $_.PSIsContainer })) {
+            Write-Warning 'No DLLs collected – creating placeholder.'
+            'NO_BUILD_OUTPUT' | Out-File artifact/placeholder.txt
+          }
         shell: pwsh
 
       - name: Upload artifact
@@ -58,13 +70,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $tag = "$env:GITHUB_REF" -replace 'refs/tags/',''
-            if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
         shell: pwsh
 
       - name: Create ZIP
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          Compress-Archive -Path artifact/* -DestinationPath plugin.zip
+        run: Compress-Archive -Path artifact/* -DestinationPath plugin.zip
         shell: pwsh
 
       - name: Publish release
