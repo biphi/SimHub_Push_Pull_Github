@@ -7,8 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name to create (e.g. v1.0.0)'
-        required: false
+        description: 'Neuen Tag erstellen (z.B. v1.2.3). Löst danach automatisch den Build durch den Tag-Push aus.'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   create-tag:
@@ -19,16 +26,33 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Create tag
+
+      - name: Validate tag format
+        shell: pwsh
         run: |
-          git tag $env:TAG
-          git push origin $env:TAG
+          if (-not "$env:INPUT_TAG".Trim()) { Write-Error "Tag leer"; exit 1 }
+          if ($env:INPUT_TAG -notmatch '^v\d+\.\d+\.\d+(-[A-Za-z0-9_.]+)?$') {
+            Write-Error "Tag muss SemVer-ähnlich sein: vMAJOR.MINOR.PATCH oder optional mit Suffix."
+            exit 1
+          }
+          if (git rev-parse -q --verify "refs/tags/$env:INPUT_TAG") {
+            Write-Error "Tag $env:INPUT_TAG existiert bereits."
+            exit 1
+          }
         env:
-          TAG: ${{ inputs.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
+
+      - name: Create annotated tag
+        shell: pwsh
+        run: |
+          git tag -a "$env:INPUT_TAG" -m "Release $env:INPUT_TAG"
+          git push origin "$env:INPUT_TAG"
+          Write-Host "Tag $env:INPUT_TAG erstellt und gepusht. Build erfolgt im separaten Tag-Push-Run."
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
 
   build-and-release:
-    needs: [create-tag]
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tag != '' }}
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: windows-latest
     env:
       PROJECT_PATH: SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj
@@ -42,79 +66,77 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Restore packages
+      - name: Restore
         shell: pwsh
         run: |
           if (Test-Path SimHub_Push_Pull_Github.sln) {
-            Write-Host 'Restoring via solution file'
             msbuild SimHub_Push_Pull_Github.sln /t:Restore /m
           } else {
-            Write-Host 'Restoring via project file'
             msbuild $env:PROJECT_PATH /t:Restore /m
           }
 
       - name: Build
+        shell: pwsh
         run: msbuild $env:PROJECT_PATH /p:Configuration=$env:BUILD_CONFIG /p:Platform="Any CPU" /m /verbosity:minimal
 
       - name: Determine version
         id: version
         shell: pwsh
         run: |
-          $tag = "$env:GITHUB_REF" -replace 'refs/tags/'
-          if (-not $tag) { $tag = 'v0.0.0' }
+          $tag = "$env:GITHUB_REF" -replace '^refs/tags/'
           $asmInfoPath = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs"
           $assemblyVersion = ''
-          if (Test-Path $asmInfoPath) {
-            $asmInfo = Get-Content $asmInfoPath -ErrorAction SilentlyContinue
-            $m = ($asmInfo | Select-String -Pattern 'AssemblyFileVersion\("([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)"\)').Matches
-            if ($m.Count -gt 0) { $assemblyVersion = $m[0].Groups[1].Value }
-          }
+            if (Test-Path $asmInfoPath) {
+              $asmInfo = Get-Content $asmInfoPath
+              $match = ($asmInfo | Select-String -Pattern 'AssemblyFileVersion\("([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)"\)').Matches
+              if ($match.Count -gt 0) { $assemblyVersion = $match[0].Groups[1].Value }
+            }
           if (-not $assemblyVersion) { $assemblyVersion = $tag.TrimStart('v') }
-          Write-Host "Tag: $tag / AssemblyVersion: $assemblyVersion"
           "version=$assemblyVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Release-Version: $assemblyVersion (Tag: $tag)"
 
-      - name: List build output
-        shell: pwsh
-        run: |
-          $base = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
-          Write-Host "Listing base output: $base"; if (Test-Path $base) { Get-ChildItem -Recurse $base } else { Write-Host 'Base output not found' }
-          $tfm = Join-Path $base 'net48'
-          if (Test-Path $tfm) { Write-Host "Listing TFM output: $tfm"; Get-ChildItem -Recurse $tfm }
-
-      - name: Prepare artifacts
-        id: prep
+      - name: Package
+        id: package
         shell: pwsh
         run: |
           $base = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
           $tfm = Join-Path $base 'net48'
-          $outDir = "artifact"
-          if (Test-Path $tfm) { $target = $tfm } elseif (Test-Path $base) { $target = $base } else { throw "No build output folder found." }
-          if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -ne 'Microsoft.*' })) {
-            Write-Host 'WARNING: No plugin DLL (non-Microsoft) found.'
+          $target = if (Test-Path $tfm) { $tfm } elseif (Test-Path $base) { $base } else { throw "Kein Build-Output gefunden." }
+          if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -notmatch '^Microsoft\.' })) {
+            Write-Warning "Keine nicht-Microsoft DLL gefunden."
           }
-            New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-          Copy-Item -Recurse -Force (Join-Path $target '*') $outDir
-          Compress-Archive -Path $outDir/* -DestinationPath plugin.zip -Force
-          $mainDll = (Get-ChildItem $outDir -Filter *.dll -Depth 1 | Select-Object -First 1).Name
-          if ($mainDll) { "maindll=$mainDll" | Out-File -FilePath $env:GITHUB_OUTPUT -Append }
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item -Recurse -Force (Join-Path $target '*') dist
+          Compress-Archive -Path dist/* -DestinationPath plugin.zip -Force
+          $main = (Get-ChildItem dist -Filter *.dll -Depth 1 | Select-Object -First 1).Name
+          if ($main) { "maindll=$main" | Out-File -FilePath $env:GITHUB_OUTPUT -Append }
 
-      - name: Upload build artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-binaries
+          name: plugin-dist
           path: |
-            artifact/**
+            dist/**
             plugin.zip
+          retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             plugin.zip
-            artifact/*.dll
           generate_release_notes: true
           name: Release ${{ steps.version.outputs.version }}
         env:
