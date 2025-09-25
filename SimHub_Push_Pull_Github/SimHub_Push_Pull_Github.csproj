@@ -54,9 +54,6 @@
     <Reference Include="LibGit2Sharp, Version=1.0.22.0, Culture=neutral, PublicKeyToken=7cbde695407f0333, processorArchitecture=MSIL">
       <HintPath>..\packages\LibGit2Sharp-SSH.1.0.22\lib\net40\LibGit2Sharp.dll</HintPath>
     </Reference>
-    <Reference Include="log4net">
-      <HintPath>C:\Program Files (x86)\SimHub\log4net.dll</HintPath>
-    </Reference>
     <Reference Include="MahApps.Metro">
       <HintPath>C:\Program Files (x86)\SimHub\MahApps.Metro.dll</HintPath>
     </Reference>
@@ -71,12 +68,6 @@
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
-    <Reference Include="SimHub.Logging">
-      <HintPath>C:\Program Files (x86)\SimHub\SimHub.Logging.dll</HintPath>
-    </Reference>
-    <Reference Include="SimHub.Plugins">
-      <HintPath>C:\Program Files (x86)\SimHub\SimHub.Plugins.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -86,12 +77,6 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
-    <Reference Include="WoteverCommon">
-      <HintPath>C:\Program Files (x86)\SimHub\WoteverCommon.dll</HintPath>
-    </Reference>
-    <Reference Include="WoteverLocalization">
-      <HintPath>C:\Program Files (x86)\SimHub\WoteverLocalization.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Class1.cs" />
