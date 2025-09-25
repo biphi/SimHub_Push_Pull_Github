@@ -256,6 +256,10 @@ namespace SimHub_Push_Pull_Github
                 linkTreeText.Inlines.Add(linkTree);
                 supportStack.Children.Add(linkTreeText);
 
+                // Thank you note below Linktree (~10px spacing)
+                var thanks = new TextBlock { Margin = new Thickness(0,10,0,0), TextWrapping = TextWrapping.Wrap, Text = "Thank you for your support! Greeting MZLuzifer ??" };
+                supportStack.Children.Add(thanks);
+
                 var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // Add tabs in desired order: Dashboards, Git, Logs, Support
