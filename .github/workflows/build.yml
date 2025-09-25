@@ -1,11 +1,11 @@
-name: Build
+name: Build-Release
 
 on:
   push:
-    tags: [ 'v*.*.*.*' ]  # only run on four-part version tags like v1.0.0.1
+    tags: [ 'v*.*.*.*' ]  # only four-part version tags
 
 jobs:
-  build:
+  build_release:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,23 +28,23 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Restore (packages.config)
-        run: |
-          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory . -Verbosity detailed
+        run: nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory . -Verbosity detailed
         shell: pwsh
 
       - name: Build Release
-        run: |
-          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
+        run: msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
         shell: pwsh
 
       - name: Collect artifacts
-        if: success()
         run: |
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
-          Copy-Item SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/SimHub_Push_Pull_Github.* artifact -ErrorAction SilentlyContinue
-          if (Test-Path SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/lib) {
-            robocopy SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/lib artifact/lib /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null
-          }
+          $outDir = 'SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release'
+          if (Test-Path $outDir) {
+            Copy-Item "$outDir/SimHub_Push_Pull_Github.*" artifact -ErrorAction SilentlyContinue
+            if (Test-Path "$outDir/lib") { robocopy "$outDir/lib" artifact/lib /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null }
+          } else { Write-Warning "Output directory not found: $outDir" }
+          # Garantiert mindestens eine Datei, sonst scheitert Upload
+          if (-not (Get-ChildItem artifact -Recurse | Where-Object { -not $_.PSIsContainer })) { 'NO_BUILD_OUTPUT' | Out-File artifact/placeholder.txt }
         shell: pwsh
 
       - name: Upload artifact
@@ -54,24 +54,21 @@ jobs:
           path: artifact
           if-no-files-found: warn
 
-  release:
-    needs: build
-    runs-on: windows-latest
-    steps:
       - name: Validate tag format
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $tag = "$env:GITHUB_REF" -replace 'refs/tags/',''
-          if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
+            if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
         shell: pwsh
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: plugin-build
-          path: dist
+
       - name: Create ZIP
-        run: Compress-Archive -Path dist/* -DestinationPath plugin.zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          Compress-Archive -Path artifact/* -DestinationPath plugin.zip
         shell: pwsh
+
       - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: plugin.zip
