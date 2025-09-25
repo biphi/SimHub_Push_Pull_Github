@@ -32,12 +32,12 @@ jobs:
 
       - name: Restore (packages.config)
         run: |
-          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory .
+          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory . -Verbosity detailed
         shell: pwsh
 
       - name: Build Release
         run: |
-          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform="Any CPU" /m /p:RestorePackages=false
+          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
         shell: pwsh
 
       - name: Collect artifacts
