@@ -73,7 +73,7 @@ namespace SimHub_Push_Pull_Github
                 var userLabel = new TextBlock { Text = "Git Username", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
                 var userBox = new TextBox { Text = _settings.GitUsername ?? string.Empty, MinWidth = 200 };
                 var tokenLabel = new TextBlock { Text = "Git Token/Password", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
-                var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 200, ToolTip = "Personal access token (GitHub) or password" };
+                var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 200, ToolTip = "Personal access token (GitHub) or password - only needed to contribute" };
                 credPanel.Children.Add(userLabel);
                 credPanel.Children.Add(userBox);
                 credPanel.Children.Add(tokenLabel);
@@ -85,7 +85,7 @@ namespace SimHub_Push_Pull_Github
                         .Select(i => i as CheckBox)
                         .Where(cb => cb != null && cb.IsChecked == true)
                         .Select(cb => (cb.Tag as DashboardItem)?.Name)
-                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        // .Where(n => !string.IsNullOrWhiteSpace(n))
                         .ToArray() ?? new string[0];
                     _plugin.SaveSettings(urlBox.Text, branchBox.Text, autoPull.IsChecked == true, _pathBox?.Text, selected, userBox.Text, tokenBox.Password);
                     LoadDashboardsList();
@@ -99,7 +99,7 @@ namespace SimHub_Push_Pull_Github
                 gitPanel.Children.Add(saveBtn);
                 gitGroup.Content = gitPanel;
                 gitStack.Children.Add(gitGroup);
-                var gitTab = new TabItem { Header = "Git", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+                var gitTab = new TabItem { Header = "Git-Settings", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // ================= Dashboards Tab =================
                 var dashStack = new StackPanel { Orientation = Orientation.Vertical };
@@ -243,6 +243,19 @@ namespace SimHub_Push_Pull_Github
                 };
                 linkText.Inlines.Add(discordLink);
                 supportStack.Children.Add(linkText);
+
+                // Added Linktree link below Discord
+                var linkTreeText = new TextBlock { Margin = new Thickness(0,4,0,0) };
+                linkTreeText.Inlines.Add(new Run("Linktree: "));
+                var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer") };
+                linkTree.RequestNavigate += (s, e) =>
+                {
+                    try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { }
+                    e.Handled = true;
+                };
+                linkTreeText.Inlines.Add(linkTree);
+                supportStack.Children.Add(linkTreeText);
+
                 var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // Add tabs in desired order: Dashboards, Git, Logs, Support
