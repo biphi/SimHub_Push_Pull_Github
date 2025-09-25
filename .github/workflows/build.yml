@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+            path: |
+              ~/.nuget/packages
+              packages
+            key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.config') }}
+            restore-keys: |
+              nuget-${{ runner.os }}-
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore (packages.config)
+        run: |
+          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj
+
+      - name: Build Release
+        run: |
+          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      - name: Collect artifacts
+        if: success()
+        run: |
+          mkdir artifact
+          copy SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\SimHub_Push_Pull_Github.* artifact\ || exit 0
+          if exist SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\lib (xcopy /E /I /Y SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\lib artifact\lib\ )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-build
+          path: artifact
+          if-no-files-found: warn
+
+  # Optional: create a draft release when a version tag is pushed (v*)
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-build
+          path: dist
+      - name: Create ZIP
+        run: Compress-Archive -Path dist/* -DestinationPath plugin.zip
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: plugin.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
