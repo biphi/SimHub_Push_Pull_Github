@@ -3,7 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace SimHub_Push_Pull_Github
 {
@@ -11,6 +14,8 @@ namespace SimHub_Push_Pull_Github
     {
         private static Version _assemblyVersion;
         private static string _computedVersion;
+        private static string _repoOwner = "mzluzifer"; // falls Fork bitte anpassen
+        private static string _repoName = "SimHub_Push_Pull_Github";
 
         public string Name => $"GitHub Dashboard Sync v{_computedVersion}";
         public string Author => "GitHub Copilot";
@@ -24,31 +29,84 @@ namespace SimHub_Push_Pull_Github
                 var asm = typeof(GithubSyncPlugin).Assembly;
                 _assemblyVersion = asm.GetName().Version ?? new Version(1, 0, 0, 0);
             }
-            catch
-            {
-                _assemblyVersion = new Version(1, 0, 0, 0);
-            }
+            catch { _assemblyVersion = new Version(1, 0, 0, 0); }
         }
 
         private DashboardSyncService _sync;
         private string _dashboardsPath;
         private PluginSettings _settings;
 
-        private static string TryGetTagVersion()
+        private static readonly Regex VersionPattern = new Regex("^v?(\\d+\\.\\d+\\.\\d+(\\.\\d+)?)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private static string TryGetTagVersionFromEnvironment()
+        {
+            foreach (var key in new[] { "GITHUB_REF_NAME", "SIMHUB_RELEASE_TAG" })
+            {
+                var val = Environment.GetEnvironmentVariable(key);
+                if (!string.IsNullOrWhiteSpace(val) && VersionPattern.IsMatch(val.Trim()))
+                {
+                    var t = val.Trim();
+                    if (t.StartsWith("v")) t = t.Substring(1);
+                    return t;
+                }
+            }
+            return null;
+        }
+
+        private static string TryGetTagVersionFromSideFile()
         {
             try
             {
-                // Prefer GitHub Actions tag name, fallback to custom var
-                var tag = Environment.GetEnvironmentVariable("GITHUB_REF_NAME") ?? Environment.GetEnvironmentVariable("SIMHUB_RELEASE_TAG");
-                if (string.IsNullOrWhiteSpace(tag)) return null;
-                tag = tag.Trim();
-                if (tag.StartsWith("refs/tags/", StringComparison.OrdinalIgnoreCase)) tag = tag.Substring("refs/tags/".Length);
-                if (tag.StartsWith("v")) tag = tag.Substring(1); // strip leading v
-                // Accept 3- oder 4-teilige Versionsnummer
-                if (System.Text.RegularExpressions.Regex.IsMatch(tag, "^\\d+\\.\\d+\\.\\d+(\\.\\d+)?$")) return tag;
-                return null;
+                var asmPath = typeof(GithubSyncPlugin).Assembly.Location;
+                var dir = Path.GetDirectoryName(asmPath);
+                if (string.IsNullOrEmpty(dir)) return null;
+                var vf = Path.Combine(dir, "plugin.version");
+                if (!File.Exists(vf)) return null;
+                var line = File.ReadAllLines(vf).FirstOrDefault()?.Trim();
+                if (string.IsNullOrWhiteSpace(line)) return null;
+                if (VersionPattern.IsMatch(line))
+                {
+                    if (line.StartsWith("v")) line = line.Substring(1);
+                    return line;
+                }
             }
-            catch { return null; }
+            catch { }
+            return null;
+        }
+
+        private static string TryGetTagVersionFromInformational()
+        {
+            try
+            {
+                var attr = typeof(GithubSyncPlugin).Assembly
+                    .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
+                    .OfType<AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault();
+                var info = attr?.InformationalVersion;
+                if (string.IsNullOrWhiteSpace(info)) return null;
+                // extract first version-like token
+                var m = VersionPattern.Match(info.Trim());
+                if (m.Success)
+                {
+                    var v = m.Groups[1].Value;
+                    if (v.StartsWith("v")) v = v.Substring(1);
+                    return v;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static string ResolveEffectiveVersion()
+        {
+            // Priority: Env > side file > informational > assembly
+            var tagEnv = TryGetTagVersionFromEnvironment();
+            if (!string.IsNullOrWhiteSpace(tagEnv)) return tagEnv;
+            var side = TryGetTagVersionFromSideFile();
+            if (!string.IsNullOrWhiteSpace(side)) return side;
+            var info = TryGetTagVersionFromInformational();
+            if (!string.IsNullOrWhiteSpace(info)) return info;
+            return _assemblyVersion.ToString();
         }
 
         public void Init(PluginManager pluginManager)
@@ -59,9 +117,7 @@ namespace SimHub_Push_Pull_Github
             NativeResolver.EnsureLibGit2SharpNativeOnPath();
             _settings = PluginSettings.Load();
 
-            // Version direkt aus Tag oder Assembly nehmen (keine interne Buildnummer / Timestamp mehr)
-            var tagVersion = TryGetTagVersion();
-            _computedVersion = !string.IsNullOrWhiteSpace(tagVersion) ? tagVersion : _assemblyVersion.ToString();
+            _computedVersion = ResolveEffectiveVersion();
 
             var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             var defaultPath = Path.Combine(docs, "SimHub", "Dashboards");
@@ -98,6 +154,50 @@ namespace SimHub_Push_Pull_Github
             TryRegisterAction(pluginManager, "Git Push", "Push to remote origin", (Action)GitPush);
             TryRegisterAction(pluginManager, "Git Commit All", "Commit all changes", (Action)GitCommitAll);
             TryRegisterAction(pluginManager, "Git Auto Tag", "Create and push automatic version tag", (Action)GitTagAuto);
+
+            // Fire and forget update check
+            Task.Run(CheckForUpdateAsync);
+        }
+
+        private async Task CheckForUpdateAsync()
+        {
+            try
+            {
+                var current = _computedVersion;
+                using (var http = new HttpClient())
+                {
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("SimHubGithubSync/" + current);
+                    var url = $"https://api.github.com/repos/{_repoOwner}/{_repoName}/releases/latest";
+                    var json = await http.GetStringAsync(url).ConfigureAwait(false);
+                    // crude parse for tag_name
+                    var tagMatch = Regex.Match(json, "\\\"tag_name\\\"\\s*:\\s*\\\"(?<tag>[^\\\"]+)\\\"", RegexOptions.IgnoreCase);
+                    if (tagMatch.Success)
+                    {
+                        var tag = tagMatch.Groups["tag"].Value.Trim();
+                        if (tag.StartsWith("v")) tag = tag.Substring(1);
+                        if (VersionPattern.IsMatch(tag))
+                        {
+                            if (TryParseVersion(tag, out var latest) && TryParseVersion(current, out var cur) && latest > cur)
+                            {
+                                PluginLogger.Warn($"A newer plugin version v{latest} is available (current v{cur}).");
+                            }
+                            else
+                            {
+                                PluginLogger.Info($"You are on the latest version (v{current}).");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Debug("Update check failed: " + ex.Message);
+            }
+        }
+
+        private static bool TryParseVersion(string s, out Version v)
+        {
+            try { v = new Version(s); return true; } catch { v = null; return false; }
         }
 
         private void WarnIfProgramFiles(string path)
