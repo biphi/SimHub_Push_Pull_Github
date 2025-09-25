@@ -42,6 +42,9 @@ namespace SimHub_Push_Pull_Github.Git
                 StandardErrorEncoding = Encoding.UTF8
             };
 
+            var sw = Stopwatch.StartNew();
+            PluginLogger.Debug($"EXEC git {arguments} (cwd='{psi.WorkingDirectory}')");
+
             using (var process = new Process { StartInfo = psi })
             {
                 var output = new StringBuilder();
@@ -57,15 +60,22 @@ namespace SimHub_Push_Pull_Github.Git
                 if (!process.WaitForExit(timeoutMs))
                 {
                     try { process.Kill(); } catch { /* ignore */ }
+                    sw.Stop();
+                    PluginLogger.Warn($"git {arguments} timed out after {sw.ElapsedMilliseconds}ms");
                     return new GitCommandResult { ExitCode = -1, Output = output.ToString(), Error = "git command timed out" };
                 }
 
-                return new GitCommandResult
+                sw.Stop();
+                var result = new GitCommandResult
                 {
                     ExitCode = process.ExitCode,
                     Output = output.ToString(),
                     Error = error.ToString()
                 };
+                PluginLogger.Debug($"EXIT {process.ExitCode} git {arguments} in {sw.ElapsedMilliseconds}ms");
+                if (!string.IsNullOrWhiteSpace(result.Error)) PluginLogger.Debug($"STDERR: {result.Error.Trim()}");
+                if (!string.IsNullOrWhiteSpace(result.Output)) PluginLogger.Debug($"STDOUT: {result.Output.Trim()}");
+                return result;
             }
         }
     }

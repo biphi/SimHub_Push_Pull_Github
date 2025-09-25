@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Xml.Serialization;
+using System.Collections.Generic;
 
 namespace SimHub_Push_Pull_Github
 {
@@ -9,12 +10,20 @@ namespace SimHub_Push_Pull_Github
         public string RemoteUrl { get; set; }
         public string Branch { get; set; }
         public bool AutoPullOnStart { get; set; }
+        public string DashboardsPath { get; set; }
+        public List<string> SelectedDashboards { get; set; }
+        public string GitUsername { get; set; }
+        public string GitToken { get; set; }
 
         public PluginSettings()
         {
             RemoteUrl = string.Empty;
-            Branch = "main";
+            Branch = "master";
             AutoPullOnStart = false;
+            DashboardsPath = string.Empty;
+            SelectedDashboards = new List<string>();
+            GitUsername = string.Empty;
+            GitToken = string.Empty;
         }
 
         internal static string GetSettingsPath()
