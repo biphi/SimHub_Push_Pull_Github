@@ -43,17 +43,20 @@ jobs:
           $outDir = 'SimHub_Push_Pull_Github/bin/Release'
           if (!(Test-Path $outDir)) { Write-Error "Output directory not found: $outDir" }
 
-          $mainFiles = Get-ChildItem $outDir -Recurse -Include SimHub_Push_Pull_Github.dll,SimHub_Push_Pull_Github.pdb
-          foreach ($f in $mainFiles) { Copy-Item $f.FullName artifact/ -Force }
+          # Haupt-DLL kopieren
+          $dll = Get-ChildItem $outDir -Recurse -Filter SimHub_Push_Pull_Github.dll | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName artifact/ -Force } else { Write-Warning 'Plugin DLL nicht gefunden.' }
 
-            # zusätzliche relevante DLLs (z.B. LibGit2Sharp) einsammeln
-          $extra = Get-ChildItem $outDir -Recurse -Include LibGit2Sharp*.dll
-          foreach ($f in $extra) { Copy-Item $f.FullName artifact/ -Force }
+          # LibGit2Sharp (falls benötigt)
+          Get-ChildItem $outDir -Recurse -Filter LibGit2Sharp*.dll | ForEach-Object { Copy-Item $_.FullName artifact/ -Force }
 
-          # falls libs Unterordner vorhanden ist -> komplett kopieren
-          if (Test-Path "$outDir/lib") {
-            Copy-Item "$outDir/lib" artifact/lib -Recurse -Force
+          # Nur lib/win32 übernehmen falls vorhanden
+          if (Test-Path "$outDir/lib/win32") {
+            Copy-Item "$outDir/lib/win32" artifact/lib/win32 -Recurse -Force
           }
+
+          # Alle PDBs entfernen (nicht verteilen)
+          Get-ChildItem artifact -Recurse -Include *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
 
           # Diagnose
           Write-Host 'Collected artifacts:'
@@ -63,7 +66,6 @@ jobs:
             Write-Warning 'No build outputs collected, creating placeholder.'
             'NO_BUILD_OUTPUT' | Out-File artifact/placeholder.txt
           }
-          # Sicherstellen dass Schritt mit Erfolg endet
           exit 0
 
       - name: Upload artifact
@@ -82,13 +84,19 @@ jobs:
 
       - name: Create ZIP
         if: startsWith(github.ref, 'refs/tags/v')
-        run: Compress-Archive -Path artifact/* -DestinationPath plugin.zip
+        run: |
+          $tag = '${{ github.ref_name }}'
+          Get-ChildItem artifact -Recurse -Include *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
+          $zip = "$tag-plugin.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path artifact/* -DestinationPath $zip
+          Write-Host "Created $zip"
         shell: pwsh
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: plugin.zip
+          files: "${{ github.ref_name }}-plugin.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
