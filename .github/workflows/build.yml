@@ -14,33 +14,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure NuGet (CLI)
+        uses: nuget/setup-nuget@v2
+
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
-            path: |
-              ~/.nuget/packages
-              packages
-            key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.config') }}
-            restore-keys: |
-              nuget-${{ runner.os }}-
+          path: |
+            ~/.nuget/packages
+            packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Restore (packages.config)
         run: |
-          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj
+          nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory .
+        shell: pwsh
 
       - name: Build Release
         run: |
-          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform="Any CPU" /m
+          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform="Any CPU" /m /p:RestorePackages=false
+        shell: pwsh
 
       - name: Collect artifacts
         if: success()
         run: |
-          mkdir artifact
-          copy SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\SimHub_Push_Pull_Github.* artifact\ || exit 0
-          if exist SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\lib (xcopy /E /I /Y SimHub_Push_Pull_Github\SimHub_Push_Pull_Github\bin\Release\lib artifact\lib\ )
+          New-Item -ItemType Directory -Path artifact -Force | Out-Null
+          Copy-Item SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/SimHub_Push_Pull_Github.* artifact -ErrorAction SilentlyContinue
+          if (Test-Path SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/lib) {
+            robocopy SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/Release/lib artifact/lib /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null
+          }
+        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -49,7 +57,6 @@ jobs:
           path: artifact
           if-no-files-found: warn
 
-  # Optional: create a draft release when a version tag is pushed (v*)
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -62,6 +69,7 @@ jobs:
           path: dist
       - name: Create ZIP
         run: Compress-Archive -Path dist/* -DestinationPath plugin.zip
+        shell: pwsh
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
