@@ -60,7 +60,7 @@ namespace SimHub_Push_Pull_Github
                 // Root TabControl
                 var tabs = new TabControl { Margin = new Thickness(8) };
 
-                // ================= Git Tab =================
+                // ================= Git Tab (created first so its controls exist for dashboard tab handlers) =================
                 var gitStack = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 4) };
                 var gitGroup = new GroupBox { Header = "Git Settings", Margin = new Thickness(0, 0, 0, 8) };
                 var gitPanel = new StackPanel { Orientation = Orientation.Vertical };
@@ -99,14 +99,10 @@ namespace SimHub_Push_Pull_Github
                 gitPanel.Children.Add(saveBtn);
                 gitGroup.Content = gitPanel;
                 gitStack.Children.Add(gitGroup);
-                var gitTab = new TabItem { Header = "Git" };
-                gitTab.Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-                tabs.Items.Add(gitTab);
+                var gitTab = new TabItem { Header = "Git", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // ================= Dashboards Tab =================
                 var dashStack = new StackPanel { Orientation = Orientation.Vertical };
-
-                // Local dashboards group
                 var localGroup = new GroupBox { Header = "Local Dashboards", Margin = new Thickness(0, 0, 0, 8) };
                 var localPanel = new StackPanel { Orientation = Orientation.Vertical };
                 localPanel.Children.Add(new TextBlock { Text = "Dashboards path" });
@@ -133,7 +129,7 @@ namespace SimHub_Push_Pull_Github
                         }
                     }
                 };
-                var refreshPathBtn = new Button { Content = "Refresh", Margin = new Thickness(6, 0, 0, 0), ToolTip = "Reload local folder" };
+                var refreshPathBtn = new Button { Content = "Refresh Local", ToolTip = "Reload local folder" };
                 refreshPathBtn.Click += (s, e) => LoadDashboardsList();
                 var openPathBtn = new Button { Content = "Open Folder", Margin = new Thickness(6, 0, 0, 0) };
                 openPathBtn.Click += (s, e) =>
@@ -142,12 +138,11 @@ namespace SimHub_Push_Pull_Github
                 };
                 pathPanel.Children.Add(_pathBox);
                 pathPanel.Children.Add(browseBtn);
-                pathPanel.Children.Add(refreshPathBtn);
                 pathPanel.Children.Add(openPathBtn);
                 localPanel.Children.Add(pathPanel);
-
                 var localHeader = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-                var selectAllLocal = new Button { Content = "Select All" };
+                localHeader.Children.Add(refreshPathBtn);
+                var selectAllLocal = new Button { Content = "Select All", Margin = new Thickness(6, 0, 0, 0) };
                 selectAllLocal.Click += (s, e) => SelectAllLocal(true);
                 var selectNoneLocal = new Button { Content = "Select None", Margin = new Thickness(6, 0, 0, 0) };
                 selectNoneLocal.Click += (s, e) => SelectAllLocal(false);
@@ -158,18 +153,15 @@ namespace SimHub_Push_Pull_Github
                 localHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) });
                 localHeader.Children.Add(_localFilterBox);
                 localPanel.Children.Add(localHeader);
-
-                _dashboardsList = new ListBox { MinHeight = 120, MinWidth = 400, Height = 220 };
+                _dashboardsList = new ListBox { MinHeight = 120, MinWidth = 400, Height = 300 };
                 _dashboardsList.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
                 localPanel.Children.Add(_dashboardsList);
                 localGroup.Content = localPanel;
                 dashStack.Children.Add(localGroup);
-
-                // Remote dashboards group
                 var remoteGroup = new GroupBox { Header = "Remote Dashboards (GitHub)", Margin = new Thickness(0, 0, 0, 8) };
                 var remotePanel = new StackPanel { Orientation = Orientation.Vertical };
                 var remoteHeader = new StackPanel { Orientation = Orientation.Horizontal };
-                var refreshRemote = new Button { Content = "Load Remote" };
+                var refreshRemote = new Button { Content = "Refresh Remote" };
                 refreshRemote.Click += (s, e) => LoadRemoteList(urlBox.Text, branchBox.Text);
                 var selectAllRemote = new Button { Content = "Select All", Margin = new Thickness(6, 0, 0, 0) };
                 selectAllRemote.Click += (s, e) => SelectAllRemote(true);
@@ -183,14 +175,11 @@ namespace SimHub_Push_Pull_Github
                 remoteHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) });
                 remoteHeader.Children.Add(_remoteFilterBox);
                 remotePanel.Children.Add(remoteHeader);
-
-                _remoteList = new ListBox { MinHeight = 120, MinWidth = 400, Height = 220 };
+                _remoteList = new ListBox { MinHeight = 120, MinWidth = 400, Height = 300 };
                 _remoteList.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
                 remotePanel.Children.Add(_remoteList);
                 remoteGroup.Content = remotePanel;
                 dashStack.Children.Add(remoteGroup);
-
-                // Actions group
                 var actionsGroup = new GroupBox { Header = "Actions", Margin = new Thickness(0, 0, 0, 8) };
                 var buttonsPanel = new StackPanel { Orientation = Orientation.Horizontal };
                 var pullBtn = new Button { Content = "Pull" };
@@ -207,10 +196,7 @@ namespace SimHub_Push_Pull_Github
                 buttonsPanel.Children.Add(downloadBtn);
                 actionsGroup.Content = buttonsPanel;
                 dashStack.Children.Add(actionsGroup);
-
-                var dashTab = new TabItem { Header = "Dashboards" };
-                dashTab.Content = new ScrollViewer { Content = dashStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-                tabs.Items.Add(dashTab);
+                var dashTab = new TabItem { Header = "Dashboards", Content = new ScrollViewer { Content = dashStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // ================= Logs Tab =================
                 var logsStack = new StackPanel { Orientation = Orientation.Vertical };
@@ -234,20 +220,18 @@ namespace SimHub_Push_Pull_Github
                     VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     MinWidth = 600,
-                    Height = 240
+                    Height = 600
                 };
                 logsPanel.Children.Add(_logText);
                 logsGroup.Content = logsPanel;
                 logsStack.Children.Add(logsGroup);
-                var logsTab = new TabItem { Header = "Logs" };
-                logsTab.Content = new ScrollViewer { Content = logsStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-                tabs.Items.Add(logsTab);
+                var logsTab = new TabItem { Header = "Logs", Content = new ScrollViewer { Content = logsStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 // ================= Support Tab =================
                 var supportStack = new StackPanel { Orientation = Orientation.Vertical };
-                var supportHeader = new TextBlock { Text = "Support & Kontakt", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) };
+                var supportHeader = new TextBlock { Text = "Support & Contact", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) };
                 supportStack.Children.Add(supportHeader);
-                var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6), Text = "Trete dem Discord bei, um Fragen zu stellen, Feedback zu geben oder Probleme zu melden." };
+                var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6), Text = "Join my Discord! If you have questions or comments let me know. Thanks in advance!" };
                 supportStack.Children.Add(info);
                 var linkText = new TextBlock();
                 linkText.Inlines.Add(new Run("Discord: "));
@@ -259,8 +243,12 @@ namespace SimHub_Push_Pull_Github
                 };
                 linkText.Inlines.Add(discordLink);
                 supportStack.Children.Add(linkText);
-                var supportTab = new TabItem { Header = "Support" };
-                supportTab.Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+                var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+
+                // Add tabs in desired order: Dashboards, Git, Logs, Support
+                tabs.Items.Add(dashTab);
+                tabs.Items.Add(gitTab);
+                tabs.Items.Add(logsTab);
                 tabs.Items.Add(supportTab);
 
                 this.Content = tabs;
@@ -541,7 +529,6 @@ namespace SimHub_Push_Pull_Github
             {
                 try
                 {
-                    // marshal to UI thread
                     Dispatcher.BeginInvoke(new Action(() => LoadLogs()));
                 }
                 catch { }
