@@ -1,8 +1,8 @@
+using LibGit2Sharp;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
-using LibGit2Sharp;
 
 namespace SimHub_Push_Pull_Github
 {

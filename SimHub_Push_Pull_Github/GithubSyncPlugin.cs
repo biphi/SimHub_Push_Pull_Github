@@ -1,9 +1,9 @@
+using SimHub.Plugins;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
 using System.Reflection;
-using SimHub.Plugins;
 
 namespace SimHub_Push_Pull_Github
 {
@@ -139,7 +139,8 @@ namespace SimHub_Push_Pull_Github
 
         private void TryRegisterAction(PluginManager pm, string name, string description, Action action)
         {
-            if (pm == null || action == null) return; var pmType = pm.GetType(); object actionsObj = null; foreach (var propName in new[] { "ActionsManager", "ActionManager", "Actions" }) { var prop = pmType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance); if (prop != null) { actionsObj = prop.GetValue(pm); if (actionsObj != null) break; } } if (actionsObj == null) actionsObj = pm; var actType = actionsObj.GetType(); foreach (var methodName in new[] { "RegisterAction", "AddAction" }) { var methods = actType.GetMethods(BindingFlags.Public | BindingFlags.Instance); foreach (var m in methods) { if (m.Name != methodName) continue; var ps = m.GetParameters(); if (ps.Length >= 2 && ps[ps.Length - 1].ParameterType == typeof(Action)) { try { object[] args; if (ps.Length == 2) args = new object[] { name, action }; else if (ps.Length == 3) args = new object[] { name, description, action }; else if (ps.Length >= 4) args = new object[] { name, description, action, null }; else continue; m.Invoke(actionsObj, args); PluginLogger.Info($"Action registered: {name}"); return; } catch (Exception ex) { PluginLogger.Error($"Failed to register action: {name}", ex); } } } }
+            if (pm == null || action == null) return; var pmType = pm.GetType(); object actionsObj = null; foreach (var propName in new[] { "ActionsManager", "ActionManager", "Actions" }) { var prop = pmType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance); if (prop != null) { actionsObj = prop.GetValue(pm); if (actionsObj != null) break; } }
+            if (actionsObj == null) actionsObj = pm; var actType = actionsObj.GetType(); foreach (var methodName in new[] { "RegisterAction", "AddAction" }) { var methods = actType.GetMethods(BindingFlags.Public | BindingFlags.Instance); foreach (var m in methods) { if (m.Name != methodName) continue; var ps = m.GetParameters(); if (ps.Length >= 2 && ps[ps.Length - 1].ParameterType == typeof(Action)) { try { object[] args; if (ps.Length == 2) args = new object[] { name, action }; else if (ps.Length == 3) args = new object[] { name, description, action }; else if (ps.Length >= 4) args = new object[] { name, description, action, null }; else continue; m.Invoke(actionsObj, args); PluginLogger.Info($"Action registered: {name}"); return; } catch (Exception ex) { PluginLogger.Error($"Failed to register action: {name}", ex); } } } }
         }
     }
 }

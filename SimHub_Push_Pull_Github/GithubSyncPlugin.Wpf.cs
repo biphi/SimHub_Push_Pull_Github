@@ -1,20 +1,19 @@
 #if SIMHUB_WPF
-using System;
-using System.IO;
-using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
 using Microsoft.Win32;
 using SimHub.Plugins;
-using System.Diagnostics;
-using System.Windows.Documents;
-using System.Windows.Navigation;
-using System.Reflection;
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Effects; // Für Schatteneffekt
 namespace SimHub_Push_Pull_Github
 {
@@ -96,8 +95,8 @@ namespace SimHub_Push_Pull_Github
                 var urlBox = new TextBox { Text = _settings.RemoteUrl ?? string.Empty, MinWidth = 420 };
                 var branchLabel = new TextBlock { Text = "Branch" };
                 var branchBox = new TextBox { Text = _settings.Branch ?? "master", MinWidth = 180 };
-                var autoPull = new CheckBox { Content = "Auto pull on start", IsChecked = _settings.AutoPullOnStart, Margin = new Thickness(0,4,0,0) };
-                var credPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,4,0,0) };
+                var autoPull = new CheckBox { Content = "Auto pull on start", IsChecked = _settings.AutoPullOnStart, Margin = new Thickness(0, 4, 0, 0) };
+                var credPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
                 var userLabel = new TextBlock { Text = "Git Username", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
                 var userBox = new TextBox { Text = _settings.GitUsername ?? string.Empty, MinWidth = 180 };
                 var tokenLabel = new TextBlock { Text = "Git Token/Password", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
@@ -178,7 +177,7 @@ namespace SimHub_Push_Pull_Github
 
                 // Actions
                 var actionsGroup = new GroupBox { Header = "Actions", Margin = new Thickness(0, 0, 0, 8) };
-                var buttonsPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,4,0,0) }; _actionsButtonsPanel = buttonsPanel;
+                var buttonsPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) }; _actionsButtonsPanel = buttonsPanel;
                 var pullBtn = Primary("Pull", async (s, e) => await RunBackground("Pull", _plugin.GitPull, false));
                 var pushBtn = Accent("Push", async (s, e) => await RunBackground("Push", _plugin.GitPush, false));
                 var commitBtn = Neutral("Commit", async (s, e) => await RunBackground("Commit", _plugin.GitCommitAll, false));
