@@ -226,27 +226,38 @@ namespace SimHub_Push_Pull_Github
             try
             {
                 if (!EnsureGitInitialized()) return null;
-                // Ensure at least an initial commit exists so tag applies
                 _git.EnsureInitialCommit();
-                var existing = new List<string>();
+
+                List<string> existing;
                 using (var repo = new Repository(DashboardsPath))
                 {
-                    existing = repo.Tags.Select(t => t.FriendlyName).Where(n => n.StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase)).ToList();
+                    existing = repo.Tags
+                        .Select(t => t.FriendlyName)
+                        .Where(n => n.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                 }
-                int major = 1, minor = 0, nextPatch = 1;
+
+                // Default initial version if none exists
+                int major = 1, minor = 0, patch = 0, build = 0;
+                bool any = false;
                 foreach (var tag in existing)
                 {
                     var raw = tag.Substring(baseName.Length).TrimStart('v');
                     var parts = raw.Split('.');
-                    if (parts.Length >= 3 && int.TryParse(parts[0], out var maj) && int.TryParse(parts[1], out var min) && int.TryParse(parts[2], out var pat))
+                    if (parts.Length < 3) continue; // need at least 3
+                    int maj, min, pat, bld = 0;
+                    if (!int.TryParse(parts[0], out maj) || !int.TryParse(parts[1], out min) || !int.TryParse(parts[2], out pat)) continue;
+                    if (parts.Length >= 4) int.TryParse(parts[3], out bld); else bld = 0;
+                    // track max (lexicographic by tuple)
+                    if (!any || (maj, min, pat, bld).CompareTo((major, minor, patch, build)) > 0)
                     {
-                        if (maj > major || (maj == major && min > minor) || (maj == major && min == minor && pat >= nextPatch))
-                        {
-                            major = maj; minor = min; if (pat >= nextPatch) nextPatch = pat + 1;
-                        }
+                        major = maj; minor = min; patch = pat; build = bld; any = true;
                     }
                 }
-                var version = $"{major}.{minor}.{nextPatch}";
+                // increment build component
+                build = build + 1;
+                if (!any) build = 1; // first tag becomes 1.0.0.1
+                var version = $"{major}.{minor}.{patch}.{build}";
                 var tagName = baseName + version;
                 var created = _git.CreateAnnotatedTag(tagName, "Auto tag " + version);
                 if (created == null) return null;

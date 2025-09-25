@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [ master, main ]
+    tags: [ 'v*.*.*.*' ] # vierteilige Version: vMajor.Minor.Patch.Build
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
@@ -62,6 +63,11 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
+      - name: Validate tag format
+        run: |
+          $tag = "$env:GITHUB_REF" -replace 'refs/tags/',''
+          if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
+        shell: pwsh
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
