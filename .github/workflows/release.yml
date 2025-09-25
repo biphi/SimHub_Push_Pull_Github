@@ -30,32 +30,64 @@ jobs:
     needs: [create-tag]
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.tag != '' }}
     runs-on: windows-latest
+    env:
+      PROJECT_PATH: SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj
+      BUILD_CONFIG: Release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      - name: Restore
-        run: nuget restore
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-      - name: Build (Release)
-        run: |
-          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /p:Configuration=Release /p:Platform="Any CPU" /m /verbosity:minimal
+      - name: Restore packages
+        run: nuget restore $env:PROJECT_PATH
 
-      - name: Collect artifact
+      - name: Build
+        run: msbuild $env:PROJECT_PATH /p:Configuration=$env:BUILD_CONFIG /p:Platform="Any CPU" /m /verbosity:minimal
+
+      - name: Determine version
+        id: version
+        shell: pwsh
         run: |
-          $out = "output"
-          New-Item -ItemType Directory -Path $out | Out-Null
-          Copy-Item -Recurse -Force "SimHub_Push_Pull_Github/bin/Release/*" $out
+          $tag = "$env:GITHUB_REF" -replace 'refs/tags/'
+          if (-not $tag) { $tag = 'v0.0.0' }
+          # Fallback: parse AssemblyInfo if needed
+          $asmInfo = Get-Content SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs -ErrorAction SilentlyContinue
+          $assemblyVersion = ($asmInfo | Select-String -Pattern 'AssemblyFileVersion\("([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)"\)').Matches.Groups[1].Value
+          if (-not $assemblyVersion) { $assemblyVersion = $tag.TrimStart('v') }
+          Write-Host "Tag: $tag / AssemblyVersion: $assemblyVersion"
+          "version=$assemblyVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Collect plugin output
+        shell: pwsh
+        run: |
+          $out = "artifact"
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          $bin = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
+          if (!(Test-Path $bin)) { throw "Build output not found: $bin" }
+          Copy-Item -Recurse -Force "$bin/*" $out
           Compress-Archive -Path $out/* -DestinationPath plugin.zip -Force
 
-      - name: Release
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-binaries
+          path: |
+            artifact/**
+            plugin.zip
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            plugin.zip
+            files: |
+              plugin.zip
+            generate_release_notes: true
+            name: Release ${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Tag provided by push event; if workflow_dispatch created it in previous job
