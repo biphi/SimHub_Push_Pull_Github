@@ -10,9 +10,7 @@ namespace SimHub_Push_Pull_Github
     public partial class GithubSyncPlugin : IPlugin
     {
         private static Version _assemblyVersion;
-        private static string _timestampSuffix;
         private static string _computedVersion;
-        private static int _runtimeBuildNumber;
 
         public string Name => $"GitHub Dashboard Sync v{_computedVersion}";
         public string Author => "GitHub Copilot";
@@ -25,15 +23,33 @@ namespace SimHub_Push_Pull_Github
             {
                 var asm = typeof(GithubSyncPlugin).Assembly;
                 _assemblyVersion = asm.GetName().Version ?? new Version(1, 0, 0, 0);
-                var path = asm.Location;
-                try { var ts = File.GetLastWriteTime(path); _timestampSuffix = ts.ToString("yyyyMMdd.HHmm"); } catch { _timestampSuffix = DateTime.Now.ToString("yyyyMMdd.HHmm"); }
             }
-            catch { _assemblyVersion = new Version(1, 0, 0, 0); _timestampSuffix = DateTime.Now.ToString("yyyyMMdd.HHmm"); }
+            catch
+            {
+                _assemblyVersion = new Version(1, 0, 0, 0);
+            }
         }
 
         private DashboardSyncService _sync;
         private string _dashboardsPath;
         private PluginSettings _settings;
+
+        private static string TryGetTagVersion()
+        {
+            try
+            {
+                // Prefer GitHub Actions tag name, fallback to custom var
+                var tag = Environment.GetEnvironmentVariable("GITHUB_REF_NAME") ?? Environment.GetEnvironmentVariable("SIMHUB_RELEASE_TAG");
+                if (string.IsNullOrWhiteSpace(tag)) return null;
+                tag = tag.Trim();
+                if (tag.StartsWith("refs/tags/", StringComparison.OrdinalIgnoreCase)) tag = tag.Substring("refs/tags/".Length);
+                if (tag.StartsWith("v")) tag = tag.Substring(1); // strip leading v
+                // Accept 3- oder 4-teilige Versionsnummer
+                if (System.Text.RegularExpressions.Regex.IsMatch(tag, "^\\d+\\.\\d+\\.\\d+(\\.\\d+)?$")) return tag;
+                return null;
+            }
+            catch { return null; }
+        }
 
         public void Init(PluginManager pluginManager)
         {
@@ -43,23 +59,21 @@ namespace SimHub_Push_Pull_Github
             NativeResolver.EnsureLibGit2SharpNativeOnPath();
             _settings = PluginSettings.Load();
 
-            // increment build number each Init
-            _settings.BuildNumber = (_settings.BuildNumber < 0 ? 0 : _settings.BuildNumber) + 1;
-            _settings.Save();
-            _runtimeBuildNumber = _settings.BuildNumber;
-            _computedVersion = $"{_assemblyVersion.Major}.{_assemblyVersion.Minor}.{_assemblyVersion.Build}.{_runtimeBuildNumber}+{_timestampSuffix}";
+            // Version direkt aus Tag oder Assembly nehmen (keine interne Buildnummer / Timestamp mehr)
+            var tagVersion = TryGetTagVersion();
+            _computedVersion = !string.IsNullOrWhiteSpace(tagVersion) ? tagVersion : _assemblyVersion.ToString();
 
             var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             var defaultPath = Path.Combine(docs, "SimHub", "Dashboards");
             _dashboardsPath = string.IsNullOrWhiteSpace(_settings.DashboardsPath) ? defaultPath : _settings.DashboardsPath;
             var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SimHub", "Plugins", "GitHubDashboardSync");
             PluginLogger.Initialize(logDir);
-            PluginLogger.Info($"Initializing plugin build #{_runtimeBuildNumber}. Dashboards path: {_dashboardsPath}");
+            PluginLogger.Info($"Initializing plugin version v{_computedVersion}. Dashboards path: {_dashboardsPath}");
             WarnIfProgramFiles(_dashboardsPath);
             _sync = new DashboardSyncService(_dashboardsPath);
             var gitInit = _sync.EnsureGitInitialized();
             PluginLogger.Info($"Git initialized: {gitInit}");
-            PluginLogger.Info($"Settings loaded. RemoteUrl={(string.IsNullOrEmpty(_settings.RemoteUrl) ? "<empty>" : _settings.RemoteUrl)}, Branch={_settings.Branch}, AutoPullOnStart={_settings.AutoPullOnStart}, BuildNumber={_settings.BuildNumber}");
+            PluginLogger.Info($"Settings loaded. RemoteUrl={(string.IsNullOrEmpty(_settings.RemoteUrl) ? "<empty>" : _settings.RemoteUrl)}, Branch={_settings.Branch}, AutoPullOnStart={_settings.AutoPullOnStart}");
             try
             {
                 if (!string.IsNullOrWhiteSpace(_settings.RemoteUrl))
