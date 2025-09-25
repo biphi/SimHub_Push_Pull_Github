@@ -35,29 +35,36 @@ jobs:
         run: msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
         shell: pwsh
 
-      - name: List output directories (diagnostic)
-        run: |
-          Write-Host 'Workspace:' (Get-Location)
-          Write-Host 'Top level:'; Get-ChildItem -Name
-          Write-Host 'Project dir:'; Get-ChildItem SimHub_Push_Pull_Github -Name
-          Write-Host 'Bin/Release contents:'
-          if (Test-Path SimHub_Push_Pull_Github/bin/Release) { Get-ChildItem SimHub_Push_Pull_Github/bin/Release } else { Write-Warning 'Release dir missing' }
-        shell: pwsh
-
       - name: Collect artifacts
+        shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           New-Item -ItemType Directory -Path artifact -Force | Out-Null
-          $outDir = 'SimHub_Push_Pull_Github/bin/Release'  # korrigiert
-          if (Test-Path $outDir) {
-            Get-ChildItem $outDir -Filter SimHub_Push_Pull_Github.dll -Recurse | ForEach-Object { Copy-Item $_.FullName artifact/ }
-            Get-ChildItem $outDir -Filter SimHub_Push_Pull_Github.pdb -Recurse | ForEach-Object { Copy-Item $_.FullName artifact/ -ErrorAction SilentlyContinue }
-            if (Test-Path "$outDir/lib") { robocopy "$outDir/lib" artifact/lib /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null }
-          } else { Write-Warning "Output directory not found: $outDir" }
+          $outDir = 'SimHub_Push_Pull_Github/bin/Release'
+          if (!(Test-Path $outDir)) { Write-Error "Output directory not found: $outDir" }
+
+          $mainFiles = Get-ChildItem $outDir -Recurse -Include SimHub_Push_Pull_Github.dll,SimHub_Push_Pull_Github.pdb
+          foreach ($f in $mainFiles) { Copy-Item $f.FullName artifact/ -Force }
+
+            # zusätzliche relevante DLLs (z.B. LibGit2Sharp) einsammeln
+          $extra = Get-ChildItem $outDir -Recurse -Include LibGit2Sharp*.dll
+          foreach ($f in $extra) { Copy-Item $f.FullName artifact/ -Force }
+
+          # falls libs Unterordner vorhanden ist -> komplett kopieren
+          if (Test-Path "$outDir/lib") {
+            Copy-Item "$outDir/lib" artifact/lib -Recurse -Force
+          }
+
+          # Diagnose
+          Write-Host 'Collected artifacts:'
+          Get-ChildItem artifact -Recurse | ForEach-Object { Write-Host $_.FullName }
+
           if (-not (Get-ChildItem artifact -Recurse | Where-Object { -not $_.PSIsContainer })) {
-            Write-Warning 'No DLLs collected – creating placeholder.'
+            Write-Warning 'No build outputs collected, creating placeholder.'
             'NO_BUILD_OUTPUT' | Out-File artifact/placeholder.txt
           }
-        shell: pwsh
+          # Sicherstellen dass Schritt mit Erfolg endet
+          exit 0
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
