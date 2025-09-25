@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Neuen Tag erstellen (z.B. v1.2.3). Löst danach automatisch den Build durch den Tag-Push aus.'
+        description: 'Neuen Tag erstellen (z.B. v1.2.3, v1.2.3.1, v1.2.3-beta1, v1.2.3+build.5). Löst danach automatisch den Build durch den Tag-Push aus.'
         required: true
 
 permissions:
@@ -31,13 +31,13 @@ jobs:
         shell: pwsh
         run: |
           if (-not "$env:INPUT_TAG".Trim()) { Write-Error "Tag leer"; exit 1 }
-          if ($env:INPUT_TAG -notmatch '^v\d+\.\d+\.\d+(-[A-Za-z0-9_.]+)?$') {
-            Write-Error "Tag muss SemVer-ähnlich sein: vMAJOR.MINOR.PATCH oder optional mit Suffix."
-            exit 1
+          # Erlaubt: vMAJOR.MINOR.PATCH[.REV][ -prerelease ][ +build ]
+          $pattern = '^v\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z._-]+)?(?:\+[0-9A-Za-z._-]+)?$'
+          if ($env:INPUT_TAG -notmatch $pattern) {
+            Write-Error "Tag muss SemVer-ähnlich sein: vMAJOR.MINOR.PATCH optional .REV, -preRelease, +build (z.B. v1.2.3, v1.2.3.4, v1.2.3-beta, v1.2.3+build.5)."; exit 1
           }
           if (git rev-parse -q --verify "refs/tags/$env:INPUT_TAG") {
-            Write-Error "Tag $env:INPUT_TAG existiert bereits."
-            exit 1
+            Write-Error "Tag $env:INPUT_TAG existiert bereits."; exit 1
           }
         env:
           INPUT_TAG: ${{ inputs.tag }}
@@ -114,9 +114,7 @@ jobs:
           $base = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
           $tfm = Join-Path $base 'net48'
           $target = if (Test-Path $tfm) { $tfm } elseif (Test-Path $base) { $base } else { throw "Kein Build-Output gefunden." }
-          if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -notmatch '^Microsoft\.' })) {
-            Write-Warning "Keine nicht-Microsoft DLL gefunden."
-          }
+          if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -notmatch '^Microsoft\.' })) { Write-Warning "Keine nicht-Microsoft DLL gefunden." }
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item -Recurse -Force (Join-Path $target '*') dist
           Compress-Archive -Path dist/* -DestinationPath plugin.zip -Force
