@@ -56,23 +56,42 @@ jobs:
         shell: pwsh
         run: |
           $tag = "$env:GITHUB_REF" -replace 'refs/tags/'
-          if (-not $tag) { $tag = 'v0.0.0' }
-          # Fallback: parse AssemblyInfo if needed
-          $asmInfo = Get-Content SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs -ErrorAction SilentlyContinue
-          $assemblyVersion = ($asmInfo | Select-String -Pattern 'AssemblyFileVersion\("([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)"\)').Matches.Groups[1].Value
+            if (-not $tag) { $tag = 'v0.0.0' }
+          $asmInfoPath = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs"
+          $assemblyVersion = ''
+          if (Test-Path $asmInfoPath) {
+            $asmInfo = Get-Content $asmInfoPath -ErrorAction SilentlyContinue
+            $m = ($asmInfo | Select-String -Pattern 'AssemblyFileVersion\("([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)"\)').Matches
+            if ($m.Count -gt 0) { $assemblyVersion = $m[0].Groups[1].Value }
+          }
           if (-not $assemblyVersion) { $assemblyVersion = $tag.TrimStart('v') }
           Write-Host "Tag: $tag / AssemblyVersion: $assemblyVersion"
           "version=$assemblyVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Collect plugin output
+      - name: List build output
         shell: pwsh
         run: |
-          $out = "artifact"
-          New-Item -ItemType Directory -Path $out -Force | Out-Null
-          $bin = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
-          if (!(Test-Path $bin)) { throw "Build output not found: $bin" }
-          Copy-Item -Recurse -Force "$bin/*" $out
-          Compress-Archive -Path $out/* -DestinationPath plugin.zip -Force
+          $base = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
+          Write-Host "Listing base output: $base"; if (Test-Path $base) { Get-ChildItem -Recurse $base } else { Write-Host 'Base output not found' }
+          $tfm = Join-Path $base 'net48'
+          if (Test-Path $tfm) { Write-Host "Listing TFM output: $tfm"; Get-ChildItem -Recurse $tfm }
+
+      - name: Prepare artifacts
+        id: prep
+        shell: pwsh
+        run: |
+          $base = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/bin/$env:BUILD_CONFIG"
+          $tfm = Join-Path $base 'net48'
+          $outDir = "artifact"
+          if (Test-Path $tfm) { $target = $tfm } elseif (Test-Path $base) { $target = $base } else { throw "No build output folder found." }
+          if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -ne 'Microsoft.*' })) {
+            Write-Host 'WARNING: No plugin DLL (non-Microsoft) found.'
+          }
+          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+          Copy-Item -Recurse -Force (Join-Path $target '*') $outDir
+          Compress-Archive -Path $outDir/* -DestinationPath plugin.zip -Force
+          $mainDll = (Get-ChildItem $outDir -Filter *.dll -Depth 1 | Select-Object -First 1).Name
+          if ($mainDll) { "maindll=$mainDll" | Out-File -FilePath $env:GITHUB_OUTPUT -Append }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -85,9 +104,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-            files: |
-              plugin.zip
-            generate_release_notes: true
-            name: Release ${{ steps.version.outputs.version }}
+          files: |
+            plugin.zip
+            artifact/*.dll
+          generate_release_notes: true
+          name: Release ${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
