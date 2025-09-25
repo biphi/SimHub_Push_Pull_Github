@@ -14,6 +14,8 @@ namespace SimHub_Push_Pull_Github
         public List<string> SelectedDashboards { get; set; }
         public string GitUsername { get; set; }
         public string GitToken { get; set; }
+        // New: sequential build / version increment
+        public int BuildNumber { get; set; }
 
         public PluginSettings()
         {
@@ -24,6 +26,7 @@ namespace SimHub_Push_Pull_Github
             SelectedDashboards = new List<string>();
             GitUsername = string.Empty;
             GitToken = string.Empty;
+            BuildNumber = 0; // start at 0
         }
 
         internal static string GetSettingsPath()

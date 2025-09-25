@@ -219,5 +219,45 @@ namespace SimHub_Push_Pull_Github
             if (!EnsureGitInitialized()) return false;
             return _git.CheckoutOrCreateBranch(branch);
         }
+
+        // === Tag creation helper referenced by plugin ===
+        public string CreateTagAndPush(string baseName = "v")
+        {
+            try
+            {
+                if (!EnsureGitInitialized()) return null;
+                // Ensure at least an initial commit exists so tag applies
+                _git.EnsureInitialCommit();
+                var existing = new List<string>();
+                using (var repo = new Repository(DashboardsPath))
+                {
+                    existing = repo.Tags.Select(t => t.FriendlyName).Where(n => n.StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                int major = 1, minor = 0, nextPatch = 1;
+                foreach (var tag in existing)
+                {
+                    var raw = tag.Substring(baseName.Length).TrimStart('v');
+                    var parts = raw.Split('.');
+                    if (parts.Length >= 3 && int.TryParse(parts[0], out var maj) && int.TryParse(parts[1], out var min) && int.TryParse(parts[2], out var pat))
+                    {
+                        if (maj > major || (maj == major && min > minor) || (maj == major && min == minor && pat >= nextPatch))
+                        {
+                            major = maj; minor = min; if (pat >= nextPatch) nextPatch = pat + 1;
+                        }
+                    }
+                }
+                var version = $"{major}.{minor}.{nextPatch}";
+                var tagName = baseName + version;
+                var created = _git.CreateAnnotatedTag(tagName, "Auto tag " + version);
+                if (created == null) return null;
+                _git.PushTag(tagName);
+                return tagName;
+            }
+            catch (System.Exception ex)
+            {
+                PluginLogger.Error("CreateTagAndPush failed", ex);
+                return null;
+            }
+        }
     }
 }

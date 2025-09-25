@@ -442,6 +442,79 @@ namespace SimHub_Push_Pull_Github.Git
             }
         }
 
+        // Tag support
+        public bool TagExists(string tagName)
+        {
+            try
+            {
+                using (var repo = new Repository(RepoPath))
+                {
+                    return repo.Tags[tagName] != null;
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Error("TagExists failed", ex);
+                return false;
+            }
+        }
+
+        public string CreateAnnotatedTag(string tagName, string message)
+        {
+            try
+            {
+                using (var repo = new Repository(RepoPath))
+                {
+                    var head = repo.Head.Tip;
+                    if (head == null)
+                    {
+                        PluginLogger.Warn("Cannot create tag: repository has no commits.");
+                        return null;
+                    }
+                    if (repo.Tags[tagName] != null)
+                    {
+                        PluginLogger.Warn($"Tag already exists: {tagName}");
+                        return tagName;
+                    }
+                    var sig = GetSignature();
+                    var tag = repo.ApplyTag(tagName, head.Sha, sig, message ?? tagName);
+                    PluginLogger.Info($"Created tag '{tagName}' on {head.Sha}");
+                    return tag.FriendlyName;
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Error("CreateAnnotatedTag failed", ex);
+                return null;
+            }
+        }
+
+        public bool PushTag(string tagName, string remote = "origin")
+        {
+            try
+            {
+                using (var repo = new Repository(RepoPath))
+                {
+                    var remoteObj = repo.Network.Remotes[remote] ?? repo.Network.Remotes.FirstOrDefault();
+                    if (remoteObj == null)
+                    {
+                        PluginLogger.Warn("No remote configured for tag push");
+                        return false;
+                    }
+                    var creds = BuildCredentialsHandler();
+                    var refSpec = "refs/tags/" + tagName;
+                    repo.Network.Push(remoteObj, refSpec, new PushOptions { CredentialsProvider = creds });
+                    PluginLogger.Info($"Pushed tag '{tagName}' to {remoteObj.Name}");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Error("PushTag failed", ex);
+                return false;
+            }
+        }
+
         private static Signature GetSignature()
         {
             return new Signature("SimHub", "simhub@example.com", DateTimeOffset.Now);
