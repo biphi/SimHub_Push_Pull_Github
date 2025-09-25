@@ -1,0 +1,61 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to create (e.g. v1.0.0)'
+        required: false
+
+jobs:
+  create-tag:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create tag
+        run: |
+          git tag $env:TAG
+          git push origin $env:TAG
+        env:
+          TAG: ${{ inputs.tag }}
+
+  build-and-release:
+    needs: [create-tag]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tag != '' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore
+        run: nuget restore
+
+      - name: Build (Release)
+        run: |
+          msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /p:Configuration=Release /p:Platform="Any CPU" /m /verbosity:minimal
+
+      - name: Collect artifact
+        run: |
+          $out = "output"
+          New-Item -ItemType Directory -Path $out | Out-Null
+          Copy-Item -Recurse -Force "SimHub_Push_Pull_Github/bin/Release/*" $out
+          Compress-Archive -Path $out/* -DestinationPath plugin.zip -Force
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            plugin.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Tag provided by push event; if workflow_dispatch created it in previous job
