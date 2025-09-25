@@ -46,7 +46,15 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Restore packages
-        run: nuget restore $env:PROJECT_PATH
+        shell: pwsh
+        run: |
+          if (Test-Path SimHub_Push_Pull_Github.sln) {
+            Write-Host 'Restoring via solution file'
+            msbuild SimHub_Push_Pull_Github.sln /t:Restore /m
+          } else {
+            Write-Host 'Restoring via project file'
+            msbuild $env:PROJECT_PATH /t:Restore /m
+          }
 
       - name: Build
         run: msbuild $env:PROJECT_PATH /p:Configuration=$env:BUILD_CONFIG /p:Platform="Any CPU" /m /verbosity:minimal
@@ -56,7 +64,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = "$env:GITHUB_REF" -replace 'refs/tags/'
-            if (-not $tag) { $tag = 'v0.0.0' }
+          if (-not $tag) { $tag = 'v0.0.0' }
           $asmInfoPath = "SimHub_Push_Pull_Github/SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs"
           $assemblyVersion = ''
           if (Test-Path $asmInfoPath) {
@@ -87,7 +95,7 @@ jobs:
           if (-not (Get-ChildItem $target -Filter *.dll -Recurse | Where-Object { $_.Name -ne 'Microsoft.*' })) {
             Write-Host 'WARNING: No plugin DLL (non-Microsoft) found.'
           }
-          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $outDir -Force | Out-Null
           Copy-Item -Recurse -Force (Join-Path $target '*') $outDir
           Compress-Archive -Path $outDir/* -DestinationPath plugin.zip -Force
           $mainDll = (Get-ChildItem $outDir -Filter *.dll -Depth 1 | Select-Object -First 1).Name
