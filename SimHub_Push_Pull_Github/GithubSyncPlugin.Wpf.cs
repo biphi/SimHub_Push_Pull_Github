@@ -53,8 +53,68 @@ namespace SimHub_Push_Pull_Github
             }
 
             private void OnVersionInfoChanged() { try { Dispatcher.Invoke(UpdateVersionUi); } catch { } }
-            private void UpdateVersionUi() { if (_versionText != null) _versionText.Text = "Version: v" + (_plugin?.CurrentVersion ?? "?"); if (_updateButton != null) { _updateButton.Visibility = (_plugin?.UpdateAvailable == true) ? Visibility.Visible : Visibility.Collapsed; _updateButton.ToolTip = _plugin?.UpdateAvailable == true ? ($"New version v{_plugin.LatestRemoteVersion} available") : string.Empty; } }
-            private Button CreateUpdateButton() { var b = new Button { Content = "Update", Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 2, 10, 2), Background = new SolidColorBrush(DangerColor), Foreground = Brushes.White, Cursor = Cursors.Hand, Visibility = Visibility.Collapsed }; b.Click += (s, e) => { try { var url = _plugin?.LatestReleaseUrl ?? $"https://github.com/mzluzifer/SimHub_Push_Pull_Github/releases"; Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }; return b; }
+            private void UpdateVersionUi()
+            {
+                if (_versionText != null) _versionText.Text = "Version: v" + (_plugin?.CurrentVersion ?? "?");
+                if (_updateButton != null)
+                {
+                    var checking = _plugin?.IsCheckingUpdate == true;
+                    var update = _plugin?.UpdateAvailable == true;
+                    if (checking)
+                    {
+                        _updateButton.Content = "Checking...";
+                        _updateButton.IsEnabled = false;
+                        _updateButton.Background = new SolidColorBrush(NeutralColor);
+                        _updateButton.ToolTip = "Checking for updates";
+                        _updateButton.Visibility = Visibility.Visible;
+                    }
+                    else if (update)
+                    {
+                        _updateButton.Content = "Update available";
+                        _updateButton.IsEnabled = true;
+                        _updateButton.Background = new SolidColorBrush(DangerColor);
+                        _updateButton.ToolTip = _plugin?.LatestRemoteVersion != null ? $"New version v{_plugin.LatestRemoteVersion} available" : "New version available";
+                        _updateButton.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        _updateButton.Content = "Check for updates";
+                        _updateButton.IsEnabled = true;
+                        _updateButton.Background = new SolidColorBrush(AccentColor);
+                        _updateButton.ToolTip = "Check GitHub for a newer version";
+                        _updateButton.Visibility = Visibility.Visible;
+                    }
+                }
+            }
+            private Button CreateUpdateButton()
+            {
+                var b = new Button
+                {
+                    Content = "Check for updates",
+                    Margin = new Thickness(8, 0, 0, 0),
+                    Padding = new Thickness(10, 2, 10, 2),
+                    Background = new SolidColorBrush(AccentColor),
+                    Foreground = Brushes.White,
+                    Cursor = Cursors.Hand,
+                    Visibility = Visibility.Visible
+                };
+                b.Click += (s, e) =>
+                {
+                    try
+                    {
+                        if (_plugin?.UpdateAvailable == true && !string.IsNullOrWhiteSpace(_plugin.LatestReleaseUrl))
+                        {
+                            Process.Start(new ProcessStartInfo(_plugin.LatestReleaseUrl) { UseShellExecute = true });
+                        }
+                        else
+                        {
+                            _plugin?.TriggerUpdateCheck();
+                        }
+                    }
+                    catch { }
+                };
+                return b;
+            }
 
             // Button Styling Helpers (Original)
             private Button CreateStyledButton(string text, RoutedEventHandler onClick, Color baseColor, Color hoverColor, string tooltip = null, bool bold = false, bool danger = false, double minWidth = 100)

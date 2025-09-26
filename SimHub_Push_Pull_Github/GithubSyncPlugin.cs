@@ -20,11 +20,13 @@ namespace SimHub_Push_Pull_Github
         private string _latestRemoteVersion;
         private string _latestRemoteUrl;
         private bool _updateAvailable;
+        private bool _isCheckingUpdate;
         public event Action VersionInfoChanged;
         public string CurrentVersion => _computedVersion;
         public bool UpdateAvailable => _updateAvailable;
         public string LatestRemoteVersion => _latestRemoteVersion;
         public string LatestReleaseUrl => _latestRemoteUrl;
+        public bool IsCheckingUpdate => _isCheckingUpdate;
 
         private static void ComputeBaseVersion()
         {
@@ -164,10 +166,19 @@ namespace SimHub_Push_Pull_Github
             Task.Run(CheckForUpdateAsync);
         }
 
+        public void TriggerUpdateCheck()
+        {
+            if (_isCheckingUpdate) return;
+            Task.Run(CheckForUpdateAsync);
+            try { VersionInfoChanged?.Invoke(); } catch { }
+        }
+
         private async Task CheckForUpdateAsync()
         {
             try
             {
+                _isCheckingUpdate = true;
+                try { VersionInfoChanged?.Invoke(); } catch { }
                 var current = _computedVersion;
                 using (var http = new System.Net.Http.HttpClient())
                 {
@@ -193,14 +204,18 @@ namespace SimHub_Push_Pull_Github
                                 _updateAvailable = false;
                                 PluginLogger.Info($"You are on the latest version (v{current}).");
                             }
-                            try { VersionInfoChanged?.Invoke(); } catch { }
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-				PluginLogger.Debug("Update check failed: " + ex.Message);
+                PluginLogger.Debug("Update check failed: " + ex.Message);
+            }
+            finally
+            {
+                _isCheckingUpdate = false;
+                try { VersionInfoChanged?.Invoke(); } catch { }
             }
         }
 
