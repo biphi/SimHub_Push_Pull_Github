@@ -207,9 +207,9 @@ namespace SimHub_Push_Pull_Github
 
                 var tabs = new TabControl { Margin = new Thickness(8) };
 
-                // Important: Git settings first to initialize _urlBox/_branchBox that other tabs consume
-                tabs.Items.Add(BuildGitSettingsTab());
+                // Dashboards first as requested; Git settings next to initialize _urlBox/_branchBox before initial loads
                 tabs.Items.Add(BuildDashboardsTab());
+                tabs.Items.Add(BuildGitSettingsTab());
                 tabs.Items.Add(BuildLogsTab());
                 tabs.Items.Add(BuildSupportTab());
                 tabs.Items.Add(BuildWikiTab());
