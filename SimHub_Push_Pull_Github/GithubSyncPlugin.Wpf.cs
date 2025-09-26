@@ -31,6 +31,8 @@ namespace SimHub_Push_Pull_Github
             private TextBox _pathBox; private ListView _dashboardsList; private ListView _remoteList; private TextBox _logText; private CheckBox _autoScrollCheck; private FileSystemWatcher _logWatcher; private TextBox _localFilterBox; private TextBox _remoteFilterBox; private bool _initialDashboardsLoaded; private readonly ObservableCollection<DashboardRow> _localRows = new ObservableCollection<DashboardRow>(); private readonly ObservableCollection<DashboardRow> _remoteRows = new ObservableCollection<DashboardRow>(); private bool _isBusy; private TextBlock _statusText; private Panel _actionsButtonsPanel; private ProgressBar _progressBar; private TextBlock _remoteRepoLinkContainer; private Hyperlink _remoteRepoHyperlink;
             // Version UI
             private TextBlock _versionText; private Button _updateButton;
+            // Wiki UI
+            private WebBrowser _wikiBrowser;
 
             // Farbpalette
             private static readonly Color PrimaryColor = Color.FromRgb(0x1E, 0x88, 0xE5); // Blau
@@ -92,7 +94,7 @@ namespace SimHub_Push_Pull_Github
                 var tokenLabel = new TextBlock { Text = "Git Token/Password", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
                 var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 180 };
                 credPanel.Children.Add(userLabel); credPanel.Children.Add(userBox); credPanel.Children.Add(tokenLabel); credPanel.Children.Add(tokenBox);
-                var saveBtn = Primary("Save Settings", async (s, e) => { var selected = _localRows.Where(r => r.IsChecked).Select(r => r.Name).ToArray(); var url = urlBox.Text; var branch = branchBox.Text; var ap = autoPull.IsChecked == true; var path = _pathBox != null ? _pathBox.Text : null; var user = userBox.Text; var token = tokenBox.Password; await RunBackground("Saving settings", delegate { _plugin.SaveSettings(url, branch, ap, path, selected, user, token); }, false); UpdateRemoteRepoHyperlink(url); await ReloadListsAsync(url, branch); }, "Speichert URL, Branch und Zugangsdaten");
+                var saveBtn = Primary("Save Settings", async (s, e) => { var selected = _localRows.Where(r => r.IsChecked).Select(r => r.Name).ToArray(); var url = urlBox.Text; var branch = branchBox.Text; var ap = autoPull.IsChecked == true; var path = _pathBox != null ? _pathBox.Text : null; var user = userBox.Text; var token = tokenBox.Password; await RunBackground("Saving settings", delegate { _plugin.SaveSettings(url, branch, ap, path, selected, user, token); }, false); UpdateRemoteRepoHyperlink(url); UpdateWiki(url); await ReloadListsAsync(url, branch); }, "Speichert URL, Branch und Zugangsdaten");
                 gitPanel.Children.Add(urlLabel); gitPanel.Children.Add(urlBox); gitPanel.Children.Add(branchLabel); gitPanel.Children.Add(branchBox); gitPanel.Children.Add(autoPull); gitPanel.Children.Add(credPanel); gitPanel.Children.Add(saveBtn); gitGroup.Content = gitPanel; gitStack.Children.Add(gitGroup); var gitTab = new TabItem { Header = "Git-Settings", Content = new ScrollViewer { Content = gitStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
                 var dashStack = new StackPanel { Orientation = Orientation.Vertical };
@@ -124,7 +126,7 @@ namespace SimHub_Push_Pull_Github
                 _remoteFilterBox.TextChanged += async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Filtering remote", delegate { LoadRemoteListInternal(u, b); }, false); };
                 remoteHeader.Children.Add(refreshRemote); remoteHeader.Children.Add(selectAllRemote); remoteHeader.Children.Add(selectNoneRemote); remoteHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); remoteHeader.Children.Add(_remoteFilterBox);
                 remotePanel.Children.Add(remoteHeader); _remoteList = CreateListView(); _remoteList.ItemsSource = _remoteRows; remotePanel.Children.Add(_remoteList); remoteGroup.Content = remotePanel; dashStack.Children.Add(remoteGroup);
-                urlBox.TextChanged += (s, e) => UpdateRemoteRepoHyperlink(urlBox.Text); UpdateRemoteRepoHyperlink(urlBox.Text);
+                urlBox.TextChanged += (s, e) => { UpdateRemoteRepoHyperlink(urlBox.Text); UpdateWiki(urlBox.Text); }; UpdateRemoteRepoHyperlink(urlBox.Text);
 
                 var actionsGroup = new GroupBox { Header = "Actions", Margin = new Thickness(0, 0, 0, 8) }; var buttonsPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) }; _actionsButtonsPanel = buttonsPanel; var pullBtn = Primary("Pull", async (s, e) => await RunBackground("Pull", _plugin.GitPull, false)); var pushBtn = Accent("Push", async (s, e) => await RunBackground("Push", _plugin.GitPush, false)); var commitBtn = Neutral("Commit", async (s, e) => await RunBackground("Commit", _plugin.GitCommitAll, false)); var downloadBtn = Primary("Download", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Download", delegate { DownloadSelectedInternal(u, b); }, false); }); buttonsPanel.Children.Add(pullBtn); buttonsPanel.Children.Add(pushBtn); buttonsPanel.Children.Add(commitBtn); buttonsPanel.Children.Add(downloadBtn); actionsGroup.Content = buttonsPanel; dashStack.Children.Add(actionsGroup);
 
@@ -134,11 +136,22 @@ namespace SimHub_Push_Pull_Github
 
                 var supportStack = new StackPanel { Orientation = Orientation.Vertical }; supportStack.Children.Add(new TextBlock { Text = "Support & Contact", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) }); supportStack.Children.Add(new TextBlock { Text = "Join my Discord! If you have questions or comments let me know. Thanks in advance!", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) }); var linkText = new TextBlock(); linkText.Inlines.Add(new Run("Discord: ")); var discordLink = new Hyperlink(new Run("https://discord.gg/WSy8G4UhjC")) { NavigateUri = new Uri("https://discord.gg/WSy8G4UhjC") }; discordLink.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkText.Inlines.Add(discordLink); supportStack.Children.Add(linkText); var linkTreeText = new TextBlock { Margin = new Thickness(0, 4, 0, 0) }; linkTreeText.Inlines.Add(new Run("Linktree: ")); var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer") }; linkTree.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; }; linkTreeText.Inlines.Add(linkTree); supportStack.Children.Add(linkTreeText); supportStack.Children.Add(new TextBlock { Margin = new Thickness(0, 10, 0, 0), Text = "Thank you for your support! Greeting MZLuzifer ??", TextWrapping = TextWrapping.Wrap }); var supportTab = new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
-                tabs.Items.Add(dashTab); tabs.Items.Add(gitTab); tabs.Items.Add(logsTab); tabs.Items.Add(supportTab);
+                // Wiki Tab
+                var wikiStack = new StackPanel { Orientation = Orientation.Vertical };
+                var wikiHeaderPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+                var openWikiBtn = Primary("Open in Browser", (s, e) => { try { var u = GetWikiUrl(urlBox.Text); if (!string.IsNullOrWhiteSpace(u)) Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } catch { } }, "Im Standardbrowser öffnen");
+                var reloadWikiBtn = Neutral("Reload", (s, e) => { try { UpdateWiki(urlBox.Text); } catch { } }, "Neu laden");
+                wikiHeaderPanel.Children.Add(openWikiBtn); wikiHeaderPanel.Children.Add(reloadWikiBtn);
+                wikiStack.Children.Add(wikiHeaderPanel);
+                _wikiBrowser = new WebBrowser { Height = 520, MinWidth = 620 };
+                wikiStack.Children.Add(_wikiBrowser);
+                var wikiTab = new TabItem { Header = "Wiki", Content = wikiStack };
+
+                tabs.Items.Add(dashTab); tabs.Items.Add(gitTab); tabs.Items.Add(logsTab); tabs.Items.Add(supportTab); tabs.Items.Add(wikiTab);
                 root.Children.Add(tabs);
                 Content = root;
 
-                var initUrl = urlBox.Text; var initBranch = branchBox.Text; _ = RunBackground("Initial load", delegate { LoadDashboardsListInternal(); LoadRemoteListInternal(initUrl, initBranch); LoadLogs(); }, false); StartLogWatcher(); Unloaded += (s, e) => StopLogWatcher();
+                var initUrl = urlBox.Text; var initBranch = branchBox.Text; _ = RunBackground("Initial load", delegate { LoadDashboardsListInternal(); LoadRemoteListInternal(initUrl, initBranch); LoadLogs(); }, false); StartLogWatcher(); UpdateWiki(initUrl); Unloaded += (s, e) => StopLogWatcher();
             }
 
             // Restliche Methoden unverändert (siehe ursprüngliche Version) – bereits unterhalb vorhanden.
@@ -191,6 +204,39 @@ namespace SimHub_Push_Pull_Github
                 {
                     StartLogWatcher();
                 }
+            }
+
+            // Wiki helpers
+            private void UpdateWiki(string remoteUrl)
+            {
+                try
+                {
+                    if (_wikiBrowser == null) return;
+                    var u = GetWikiUrl(remoteUrl);
+                    if (!string.IsNullOrWhiteSpace(u))
+                    {
+                        _wikiBrowser.Navigate(u);
+                    }
+                }
+                catch { }
+            }
+            private string GetWikiUrl(string remoteUrl)
+            {
+                try
+                {
+                    var baseUrl = NormalizeRemoteUrlToWeb(remoteUrl);
+                    if (string.IsNullOrWhiteSpace(baseUrl))
+                    {
+                        // Fallback auf dieses Repo
+                        baseUrl = "https://github.com/mzluzifer/SimHub_Push_Pull_Github";
+                    }
+                    if (!baseUrl.EndsWith("/wiki", StringComparison.OrdinalIgnoreCase))
+                    {
+                        baseUrl += "/wiki";
+                    }
+                    return baseUrl;
+                }
+                catch { return null; }
             }
         }
     }
