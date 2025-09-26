@@ -105,7 +105,7 @@ namespace SimHub_Push_Pull_Github
                         _updateButton.Content = "Checking...";
                         _updateButton.IsEnabled = false;
                         _updateButton.Background = new SolidColorBrush(NeutralColor);
-                        _updateButton.ToolTip = "Checking for updates";
+                        _updateButton.ToolTip = "Check for plugin updates on GitHub";
                         _updateButton.Visibility = Visibility.Visible;
                     }
                     else if (update)
@@ -113,7 +113,7 @@ namespace SimHub_Push_Pull_Github
                         _updateButton.Content = "Update available";
                         _updateButton.IsEnabled = true;
                         _updateButton.Background = new SolidColorBrush(DangerColor);
-                        _updateButton.ToolTip = _plugin?.LatestRemoteVersion != null ? $"New version v{_plugin.LatestRemoteVersion} available" : "New version available";
+                        _updateButton.ToolTip = _plugin?.LatestRemoteVersion != null ? $"Open GitHub release v{_plugin.LatestRemoteVersion}" : "Open latest GitHub release";
                         _updateButton.Visibility = Visibility.Visible;
                     }
                     else
@@ -137,7 +137,8 @@ namespace SimHub_Push_Pull_Github
                     Background = new SolidColorBrush(AccentColor),
                     Foreground = Brushes.White,
                     Cursor = Cursors.Hand,
-                    Visibility = Visibility.Visible
+                    Visibility = Visibility.Visible,
+                    ToolTip = "Check GitHub for a newer version"
                 };
                 b.Click += (s, e) =>
                 {
@@ -237,16 +238,16 @@ namespace SimHub_Push_Pull_Github
                 var gitPanel = new StackPanel { Orientation = Orientation.Vertical };
 
                 var urlLabel = new TextBlock { Text = "Remote URL" };
-                _urlBox = new TextBox { Text = _settings.RemoteUrl ?? string.Empty, MinWidth = 420 };
+                _urlBox = new TextBox { Text = _settings.RemoteUrl ?? string.Empty, MinWidth = 420, ToolTip = "GitHub repository URL (HTTPS or SSH). Example: https://github.com/user/repo.git" };
                 var branchLabel = new TextBlock { Text = "Branch" };
-                _branchBox = new TextBox { Text = _settings.Branch ?? "master", MinWidth = 180 };
-                var autoPull = new CheckBox { Content = "Auto pull on start", IsChecked = _settings.AutoPullOnStart, Margin = new Thickness(0, 4, 0, 0) };
+                _branchBox = new TextBox { Text = _settings.Branch ?? "master", MinWidth = 180, ToolTip = "Branch to sync with (e.g., master or main)" };
+                var autoPull = new CheckBox { Content = "Auto pull on start", IsChecked = _settings.AutoPullOnStart, Margin = new Thickness(0, 4, 0, 0), ToolTip = "Automatically pull latest changes when SimHub starts" };
 
                 var credPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
                 var userLabel = new TextBlock { Text = "Git Username", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-                var userBox = new TextBox { Text = _settings.GitUsername ?? string.Empty, MinWidth = 180 };
+                var userBox = new TextBox { Text = _settings.GitUsername ?? string.Empty, MinWidth = 180, ToolTip = "GitHub username (for HTTPS auth). Leave empty for public read-only" };
                 var tokenLabel = new TextBlock { Text = "Git Token/Password", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
-                var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 180 };
+                var tokenBox = new PasswordBox { Password = _settings.GitToken ?? string.Empty, MinWidth = 180, ToolTip = "Personal Access Token or password (required for private repos and push)" };
                 credPanel.Children.Add(userLabel); credPanel.Children.Add(userBox); credPanel.Children.Add(tokenLabel); credPanel.Children.Add(tokenBox);
 
                 var saveBtn = Primary("Save Settings", async (s, e) =>
@@ -257,7 +258,7 @@ namespace SimHub_Push_Pull_Github
                     await RunBackground("Saving settings", delegate { _plugin.SaveSettings(url, branch, ap, path, selected, user, token); }, false);
                     UpdateRemoteRepoHyperlink(url);
                     await ReloadListsAsync(url, branch);
-                }, "Speichert URL, Branch und Zugangsdaten");
+                }, "Save and apply repository, branch, and credentials");
 
                 // Button to open GitHub new repository page
                 var newRepoBtn = Accent("Create repository on GitHub", (s, e) =>
@@ -293,7 +294,7 @@ namespace SimHub_Push_Pull_Github
                 localPanel.Children.Add(new TextBlock { Text = "Dashboards path" });
 
                 var pathPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                _pathBox = new TextBox { Text = string.IsNullOrWhiteSpace(_settings.DashboardsPath) ? GetDefaultDashboardsPath() : _settings.DashboardsPath, MinWidth = 420 };
+                _pathBox = new TextBox { Text = string.IsNullOrWhiteSpace(_settings.DashboardsPath) ? GetDefaultDashboardsPath() : _settings.DashboardsPath, MinWidth = 420, ToolTip = "Local dashboards folder used by SimHub" };
                 var browseBtn = Neutral("Browse", async (s, e) =>
                 {
                     if (!TrySelectFolderViaReflection())
@@ -309,23 +310,23 @@ namespace SimHub_Push_Pull_Github
                             }
                         }
                     }
-                }, "Ordner wählen");
+                }, "Choose dashboards folder");
                 var openPathBtn = Neutral("Open", (s, e) =>
                 {
                     try { if (Directory.Exists(_pathBox.Text)) Process.Start("explorer.exe", _pathBox.Text); } catch { }
-                }, "Ordner im Explorer öffnen");
+                }, "Open dashboards folder in Explorer");
                 pathPanel.Children.Add(_pathBox); pathPanel.Children.Add(browseBtn); pathPanel.Children.Add(openPathBtn);
                 localPanel.Children.Add(pathPanel);
 
                 var localHeader = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-                var refreshLocal = Primary("Refresh", async (s, e) => await RunBackground("Refreshing local", LoadDashboardsListInternal, false), "Lokale Liste neu laden");
-                var selectAllLocal = Accent("All", (s, e) => SelectAllLocal(true), "Alle auswählen");
-                var selectNoneLocal = Neutral("None", (s, e) => SelectAllLocal(false), "Keine auswählen");
+                var refreshLocal = Primary("Refresh", async (s, e) => await RunBackground("Refreshing local", LoadDashboardsListInternal, false), "Reload local dashboards list");
+                var selectAllLocal = Accent("All", (s, e) => SelectAllLocal(true), "Select all local dashboards");
+                var selectNoneLocal = Neutral("None", (s, e) => SelectAllLocal(false), "Deselect all local dashboards");
                 var uploadSelectedBtnHdr = Accent("Upload selected", async (s, e) =>
                 {
                     var u = _urlBox.Text; var b = _branchBox.Text; await RunBackground("Upload selected", delegate { UploadSelectedInternal(u, b); }, false);
                 }, "Commit & push checked local dashboards to GitHub");
-                _localFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter (name contains)", VerticalAlignment = VerticalAlignment.Center };
+                _localFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter local dashboards by name (contains)", VerticalAlignment = VerticalAlignment.Center };
                 _localFilterBox.TextChanged += async (s, e) => await RunBackground("Filtering", LoadDashboardsListInternal, false);
                 localHeader.Children.Add(refreshLocal); localHeader.Children.Add(selectAllLocal); localHeader.Children.Add(selectNoneLocal); localHeader.Children.Add(uploadSelectedBtnHdr);
                 localHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); localHeader.Children.Add(_localFilterBox);
@@ -337,7 +338,7 @@ namespace SimHub_Push_Pull_Github
                 var remoteGroup = new GroupBox { Header = "Remote Dashboards (GitHub)", Margin = new Thickness(0, 0, 0, 8) };
                 var remotePanel = new StackPanel { Orientation = Orientation.Vertical };
                 _remoteRepoLinkContainer = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-                _remoteRepoHyperlink = new Hyperlink(new Run("<none>"));
+                _remoteRepoHyperlink = new Hyperlink(new Run("<none>")) { ToolTip = "Open repository in browser" };
                 _remoteRepoHyperlink.RequestNavigate += (s, e) =>
                 {
                     try { if (_remoteRepoHyperlink.NavigateUri != null) Process.Start(new ProcessStartInfo(_remoteRepoHyperlink.NavigateUri.AbsoluteUri) { UseShellExecute = true }); } catch { }
@@ -351,14 +352,14 @@ namespace SimHub_Push_Pull_Github
                 var refreshRemote = Primary("Refresh", async (s, e) =>
                 {
                     var u = _urlBox.Text; var b = _branchBox.Text; await RunBackground("Refreshing remote", delegate { LoadRemoteListInternal(u, b); }, false);
-                }, "Remote list neu laden");
-                var selectAllRemote = Accent("All", (s, e) => SelectAllRemote(true), "Alle auswählen");
-                var selectNoneRemote = Neutral("None", (s, e) => SelectAllRemote(false), "Keine auswählen");
+                }, "Reload remote dashboards list from GitHub");
+                var selectAllRemote = Accent("All", (s, e) => SelectAllRemote(true), "Select all remote dashboards");
+                var selectNoneRemote = Neutral("None", (s, e) => SelectAllRemote(false), "Deselect all remote dashboards");
                 var downloadSelectedBtnHdr = Primary("Download selected", async (s, e) =>
                 {
                     var u = _urlBox.Text; var b = _branchBox.Text; await RunBackground("Download selected", delegate { DownloadSelectedInternal(u, b); }, false);
                 }, "Download checked remote dashboards into your local folder");
-                _remoteFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter (name contains)", VerticalAlignment = VerticalAlignment.Center };
+                _remoteFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter remote dashboards by name (contains)", VerticalAlignment = VerticalAlignment.Center };
                 _remoteFilterBox.TextChanged += async (s, e) =>
                 {
                     var u = _urlBox.Text; var b = _branchBox.Text; await RunBackground("Filtering remote", delegate { LoadRemoteListInternal(u, b); }, false);
@@ -378,9 +379,9 @@ namespace SimHub_Push_Pull_Github
                 var logsGroup = new GroupBox { Header = "Logs" };
                 var logsPanel = new StackPanel { Orientation = Orientation.Vertical };
                 var logsHeader = new StackPanel { Orientation = Orientation.Horizontal };
-                var refreshLogs = Neutral("Refresh", (s, e) => LoadLogs(), "Logs neu laden");
-                var clearLogs = Danger("Clear", (s, e) => ClearLogs(), "Logdatei löschen");
-                _autoScrollCheck = new CheckBox { Content = "Auto-scroll", IsChecked = true, Margin = new Thickness(12, 4, 0, 4), VerticalAlignment = VerticalAlignment.Center };
+                var refreshLogs = Neutral("Refresh", (s, e) => LoadLogs(), "Reload logs from disk");
+                var clearLogs = Danger("Clear", (s, e) => ClearLogs(), "Clear plugin log file");
+                _autoScrollCheck = new CheckBox { Content = "Auto-scroll", IsChecked = true, Margin = new Thickness(12, 4, 0, 4), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Automatically scroll to end when new logs arrive" };
                 logsHeader.Children.Add(refreshLogs); logsHeader.Children.Add(clearLogs); logsHeader.Children.Add(_autoScrollCheck);
                 logsPanel.Children.Add(logsHeader);
                 _logText = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, VerticalScrollBarVisibility = ScrollBarVisibility.Visible, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, MinWidth = 620, Height = 520, FontFamily = new FontFamily("Consolas"), FontSize = 12 };
@@ -397,13 +398,13 @@ namespace SimHub_Push_Pull_Github
                 supportStack.Children.Add(new TextBlock { Text = "Join my Discord! If you have questions or comments let me know. Thanks in advance!", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
                 var linkText = new TextBlock();
                 linkText.Inlines.Add(new Run("Discord: "));
-                var discordLink = new Hyperlink(new Run("https://discord.gg/WSy8G4UhjC")) { NavigateUri = new Uri("https://discord.gg/WSy8G4UhjC") };
+                var discordLink = new Hyperlink(new Run("https://discord.gg/WSy8G4UhjC")) { NavigateUri = new Uri("https://discord.gg/WSy8G4UhjC"), ToolTip = "Open Discord" };
                 discordLink.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; };
                 linkText.Inlines.Add(discordLink);
                 supportStack.Children.Add(linkText);
                 var linkTreeText = new TextBlock { Margin = new Thickness(0, 4, 0, 0) };
                 linkTreeText.Inlines.Add(new Run("Linktree: "));
-                var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer") };
+                var linkTree = new Hyperlink(new Run("https://linktr.ee/mzluzifer")) { NavigateUri = new Uri("https://linktr.ee/mzluzifer"), ToolTip = "Open Linktree" };
                 linkTree.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; };
                 linkTreeText.Inlines.Add(linkTree);
                 supportStack.Children.Add(linkTreeText);
@@ -417,7 +418,7 @@ namespace SimHub_Push_Pull_Github
                 var openWikiBtn = Primary("Open Wiki", (s, e) =>
                 {
                     try { Process.Start(new ProcessStartInfo("https://github.com/mzluzifer/SimHub_Push_Pull_Github/wiki") { UseShellExecute = true }); } catch { }
-                }, "GitHub Wiki öffnen");
+                }, "Open plugin Wiki on GitHub");
                 wikiStack.Children.Add(openWikiBtn);
                 return new TabItem { Header = "Wiki", Content = wikiStack };
             }
@@ -749,6 +750,7 @@ namespace SimHub_Push_Pull_Github
                 var cbFactory = new FrameworkElementFactory(typeof(CheckBox));
                 cbFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("IsChecked") { Mode = System.Windows.Data.BindingMode.TwoWay });
                 cbFactory.SetBinding(CheckBox.ContentProperty, new System.Windows.Data.Binding("Name"));
+                cbFactory.SetValue(CheckBox.ToolTipProperty, "Select dashboard");
                 spFactory.AppendChild(cbFactory);
                 nameTemplate.VisualTree = spFactory;
                 var col1 = new GridViewColumn { Header = "Name", Width = 260, CellTemplate = nameTemplate };
