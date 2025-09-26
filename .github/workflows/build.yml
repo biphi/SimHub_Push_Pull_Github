@@ -31,6 +31,30 @@ jobs:
         run: nuget restore SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj -PackagesDirectory packages -SolutionDirectory . -Verbosity detailed
         shell: pwsh
 
+      - name: Derive version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: ver
+        run: |
+          $tag = '${{ github.ref_name }}' # e.g. v1.2.3.4
+          if ($tag -notmatch '^v\d+\.\d+\.\d+\.\d+$') { Write-Error "Invalid tag format '$tag'. Expected v1.0.0.1 pattern." }
+          $fileVersion = $tag.TrimStart('v')
+          echo "fileVersion=$fileVersion" >> $env:GITHUB_OUTPUT
+          echo "infoVersion=$tag" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Stamp AssemblyInfo
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $asm = 'SimHub_Push_Pull_Github/Properties/AssemblyInfo.cs'
+          (Get-Content $asm) |
+            ForEach-Object {
+              $_ -replace 'AssemblyFileVersion\("[^"]+"\)', 'AssemblyFileVersion("${{ steps.ver.outputs.fileVersion }}")' `
+                 -replace 'AssemblyInformationalVersion\("[^"]+"\)', 'AssemblyInformationalVersion("${{ steps.ver.outputs.infoVersion }}")'
+            } | Set-Content $asm -Encoding UTF8
+          Write-Host 'Stamped versions:'
+          Select-String -Path $asm -Pattern 'Assembly(File|Informational)Version' | ForEach-Object { $_.Line }
+        shell: pwsh
+
       - name: Build Release
         run: msbuild SimHub_Push_Pull_Github/SimHub_Push_Pull_Github.csproj /t:Clean,Build /p:Configuration=Release /p:Platform=AnyCPU /m /p:RestorePackages=false
         shell: pwsh

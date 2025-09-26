@@ -23,4 +23,7 @@ using System.Runtime.InteropServices;
 
 // Feste AssemblyVersion für deterministischen Build, Anzeige der laufenden Build-Zeit erfolgt im Plugin-Namen
 [assembly: AssemblyVersion("1.0.0.0")]
+// Diese FileVersion wird im CI aus dem Git-Tag (vX.Y.Z.W) überschrieben
 [assembly: AssemblyFileVersion("1.0.0.0")]
+// Produktversion (wird ebenfalls im CI auf den Tag gesetzt, inkl. führendem 'v')
+[assembly: AssemblyInformationalVersion("v1.0.0.0")]
