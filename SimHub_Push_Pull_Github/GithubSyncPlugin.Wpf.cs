@@ -170,9 +170,10 @@ namespace SimHub_Push_Pull_Github
                 var refreshLocal = Primary("Refresh", async (s, e) => await RunBackground("Refreshing local", LoadDashboardsListInternal, false), "Lokale Liste neu laden");
                 var selectAllLocal = Accent("All", (s, e) => SelectAllLocal(true), "Alle auswählen");
                 var selectNoneLocal = Neutral("None", (s, e) => SelectAllLocal(false), "Keine auswählen");
+                var uploadSelectedBtnHdr = Accent("Upload selected", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Upload selected", delegate { UploadSelectedInternal(u, b); }, false); }, "Commit & push checked local dashboards to GitHub");
                 _localFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter (name contains)", VerticalAlignment = VerticalAlignment.Center };
                 _localFilterBox.TextChanged += async (s, e) => await RunBackground("Filtering", LoadDashboardsListInternal, false);
-                localHeader.Children.Add(refreshLocal); localHeader.Children.Add(selectAllLocal); localHeader.Children.Add(selectNoneLocal); localHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); localHeader.Children.Add(_localFilterBox);
+                localHeader.Children.Add(refreshLocal); localHeader.Children.Add(selectAllLocal); localHeader.Children.Add(selectNoneLocal); localHeader.Children.Add(uploadSelectedBtnHdr); localHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); localHeader.Children.Add(_localFilterBox);
                 localPanel.Children.Add(localHeader);
                 _dashboardsList = CreateListView(); _dashboardsList.ItemsSource = _localRows; localPanel.Children.Add(_dashboardsList); localGroup.Content = localPanel; dashStack.Children.Add(localGroup);
 
@@ -182,21 +183,12 @@ namespace SimHub_Push_Pull_Github
                 var refreshRemote = Primary("Refresh", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Refreshing remote", delegate { LoadRemoteListInternal(u, b); }, false); }, "Remote list neu laden");
                 var selectAllRemote = Accent("All", (s, e) => SelectAllRemote(true), "Alle auswählen");
                 var selectNoneRemote = Neutral("None", (s, e) => SelectAllRemote(false), "Keine auswählen");
+                var downloadSelectedBtnHdr = Primary("Download selected", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Download selected", delegate { DownloadSelectedInternal(u, b); }, false); }, "Download checked remote dashboards into your local folder");
                 _remoteFilterBox = new TextBox { MinWidth = 200, Margin = new Thickness(12, 4, 0, 4), ToolTip = "Filter (name contains)", VerticalAlignment = VerticalAlignment.Center };
                 _remoteFilterBox.TextChanged += async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Filtering remote", delegate { LoadRemoteListInternal(u, b); }, false); };
-                remoteHeader.Children.Add(refreshRemote); remoteHeader.Children.Add(selectAllRemote); remoteHeader.Children.Add(selectNoneRemote); remoteHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); remoteHeader.Children.Add(_remoteFilterBox);
+                remoteHeader.Children.Add(refreshRemote); remoteHeader.Children.Add(selectAllRemote); remoteHeader.Children.Add(selectNoneRemote); remoteHeader.Children.Add(downloadSelectedBtnHdr); remoteHeader.Children.Add(new TextBlock { Text = "Filter:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) }); remoteHeader.Children.Add(_remoteFilterBox);
                 remotePanel.Children.Add(remoteHeader); _remoteList = CreateListView(); _remoteList.ItemsSource = _remoteRows; remotePanel.Children.Add(_remoteList); remoteGroup.Content = remotePanel; dashStack.Children.Add(remoteGroup);
                 urlBox.TextChanged += (s, e) => { UpdateRemoteRepoHyperlink(urlBox.Text); }; UpdateRemoteRepoHyperlink(urlBox.Text);
-
-                // Quick Actions (simplified upload/download)
-                var quickActions = new GroupBox { Header = "Quick Actions", Margin = new Thickness(0, 0, 0, 8) };
-                var quickPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
-                var downloadSelectedBtn = Primary("Download selected from GitHub", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Download selected", delegate { DownloadSelectedInternal(u, b); }, false); }, "Downloads checked items from 'Remote Dashboards' into your local dashboards folder");
-                var uploadSelectedBtn = Accent("Upload selected to GitHub", async (s, e) => { var u = urlBox.Text; var b = branchBox.Text; await RunBackground("Upload selected", delegate { UploadSelectedInternal(u, b); }, false); }, "Commits and pushes checked items from 'Local Dashboards' to GitHub");
-                quickPanel.Children.Add(downloadSelectedBtn);
-                quickPanel.Children.Add(uploadSelectedBtn);
-                quickActions.Content = quickPanel;
-                dashStack.Children.Add(quickActions);
 
                 // Advanced Git Actions
                 var actionsGroup = new GroupBox { Header = "Advanced Git", Margin = new Thickness(0, 0, 0, 8) };
@@ -228,7 +220,7 @@ namespace SimHub_Push_Pull_Github
 
             // Restliche Methoden unverändert (siehe ursprüngliche Version) – bereits unterhalb vorhanden.
             private void UpdateRemoteRepoHyperlink(string remoteUrl) { try { if (_remoteRepoHyperlink == null) return; if (string.IsNullOrWhiteSpace(remoteUrl)) { _remoteRepoHyperlink.NavigateUri = null; _remoteRepoHyperlink.Inlines.Clear(); _remoteRepoHyperlink.Inlines.Add(new Run("<none>")); return; } var url = NormalizeRemoteUrlToWeb(remoteUrl); _remoteRepoHyperlink.NavigateUri = new Uri(url); _remoteRepoHyperlink.Inlines.Clear(); _remoteRepoHyperlink.Inlines.Add(new Run(url)); } catch { } }
-            private string NormalizeRemoteUrlToWeb(string remote) { try { if (string.IsNullOrWhiteSpace(remote)) return remote; var r = remote.Trim(); if (r.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase)) { r = r.Substring("git@github.com:".Length); if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return "https://github.com/" + r; } if (r.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || r.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) { if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } catch { return remote; } }
+            private string NormalizeRemoteUrlToWeb(string remote) { try { if (string.IsNullOrWhiteSpace(remote)) return remote; var r = remote.Trim(); if (r.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase)) { r = r.Substring("git@github.com:".Length); if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return "https://github.com/" + r; } if (r.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || r.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) { if (r.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } if (r.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) r = r.Substring(0, r.Length - 4); return r; } catch { return remote; } }
             private void SetBusy(bool busy, string message) { _isBusy = busy; if (_statusText != null) _statusText.Text = message; if (_actionsButtonsPanel != null) foreach (UIElement child in _actionsButtonsPanel.Children) child.IsEnabled = !busy; if (_progressBar != null) { _progressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed; _progressBar.IsIndeterminate = busy; } }
             private async Task RunBackground(string label, Action action, bool reloadAfter) { if (_isBusy) return; SetBusy(true, label + " ..."); await Task.Run(delegate { try { action(); } catch (Exception ex) { PluginLogger.Error(label + " failed", ex); } }); if (reloadAfter) { try { LoadDashboardsListInternal(); } catch { } } SetBusy(false, "Ready"); }
             private async Task ReloadListsAsync(string remoteUrl, string branch) { await Task.Run(delegate { LoadDashboardsListInternal(); LoadRemoteListInternal(remoteUrl, branch); }); }
