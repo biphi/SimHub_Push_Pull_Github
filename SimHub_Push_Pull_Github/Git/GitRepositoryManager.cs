@@ -44,25 +44,8 @@ namespace SimHub_Push_Pull_Github.Git
                 PluginLogger.Info($"Using git credentials: user='{u}', tokenLen={(token ?? string.Empty).Length}");
                 return (_url, _user, _types) => new UsernamePasswordCredentials { Username = u, Password = token };
             }
-            PluginLogger.Warn("No git credentials configured (username/token). Push may fail.");
+            PluginLogger.Warn("No git credentials configured (username/token). Read-only operations may still work for public repos.");
             return null;
-        }
-
-        private bool HasWriteAccess()
-        {
-            try
-            {
-                var testFile = Path.Combine(RepoPath, $".write_test_{Guid.NewGuid():N}.tmp");
-                Directory.CreateDirectory(RepoPath);
-                File.WriteAllText(testFile, "test");
-                File.Delete(testFile);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                PluginLogger.Warn($"No write access to '{RepoPath}': {ex.Message}");
-                return false;
-            }
         }
 
         private static bool IsUnderGitDirectory(string fullPath, string repoRoot)
@@ -80,6 +63,45 @@ namespace SimHub_Push_Pull_Github.Git
         {
             var status = repo.RetrieveStatus(new StatusOptions());
             return status.IsDirty;
+        }
+
+        private static string ToPublicHttpsIfPossible(string url)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url)) return null;
+                var u = url.Trim();
+                // git@github.com:owner/repo(.git)
+                if (u.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tail = u.Substring("git@github.com:".Length);
+                    if (tail.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) tail = tail.Substring(0, tail.Length - 4);
+                    return "https://github.com/" + tail + ".git";
+                }
+                // https://user[:pass]@github.com/owner/repo(.git) -> strip credentials
+                if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    // strip userinfo if any
+                    var idxScheme = u.IndexOf("://", StringComparison.Ordinal);
+                    if (idxScheme > 0)
+                    {
+                        var scheme = u.Substring(0, idxScheme + 3); // incl ://
+                        var rest = u.Substring(idxScheme + 3);
+                        var at = rest.IndexOf('@');
+                        if (at >= 0)
+                        {
+                            rest = rest.Substring(at + 1); // drop credentials
+                        }
+                        // ensure https
+                        if (!scheme.Equals("https://", StringComparison.OrdinalIgnoreCase)) scheme = "https://";
+                        // ensure .git suffix
+                        if (!rest.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) rest += ".git";
+                        return scheme + rest;
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         public bool IsRepository()
@@ -251,12 +273,32 @@ namespace SimHub_Push_Pull_Github.Git
                     if (r == null) return false;
                     var refSpecs = r.FetchRefSpecs.Select(x => x.Specification);
                     var creds = BuildCredentialsHandler();
-                    Commands.Fetch(repo, r.Name, refSpecs, new FetchOptions
+                    try
                     {
-                        CredentialsProvider = creds
-                    }, null);
+                        Commands.Fetch(repo, r.Name, refSpecs, new FetchOptions
+                        {
+                            CredentialsProvider = creds
+                        }, null);
+                        return true;
+                    }
+                    catch (LibGit2SharpException ex)
+                    {
+                        // Fallback for public GitHub repos when no credentials are set: convert to anonymous HTTPS and retry
+                        if (creds == null)
+                        {
+                            var anon = ToPublicHttpsIfPossible(r.Url);
+                            if (!string.IsNullOrWhiteSpace(anon) && !string.Equals(anon, r.Url, StringComparison.OrdinalIgnoreCase))
+                            {
+                                PluginLogger.Info($"Fetch failed with URL '{r.Url}'. Retrying anonymously via '{anon}'...");
+                                repo.Network.Remotes.Update(r.Name, rr => rr.Url = anon);
+                                Commands.Fetch(repo, r.Name, refSpecs, new FetchOptions { CredentialsProvider = null }, null);
+                                return true;
+                            }
+                        }
+                        PluginLogger.Error("Fetch failed", ex);
+                        return false;
+                    }
                 }
-                return true;
             }
             catch (Exception ex)
             {
@@ -518,6 +560,23 @@ namespace SimHub_Push_Pull_Github.Git
         private static Signature GetSignature()
         {
             return new Signature("SimHub", "simhub@example.com", DateTimeOffset.Now);
+        }
+
+        private bool HasWriteAccess()
+        {
+            try
+            {
+                var testFile = Path.Combine(RepoPath, $".write_test_{Guid.NewGuid():N}.tmp");
+                Directory.CreateDirectory(RepoPath);
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Warn($"No write access to '{RepoPath}': {ex.Message}");
+                return false;
+            }
         }
     }
 }
