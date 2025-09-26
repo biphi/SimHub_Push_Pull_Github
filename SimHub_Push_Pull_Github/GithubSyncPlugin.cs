@@ -10,9 +10,13 @@ using System.Threading.Tasks;
 
 namespace SimHub_Push_Pull_Github
 {
+    [PluginDescription("Plugin to sync your Dashboard with GitHub. It's possible to collaborate now with others on the same dashboard.")]
+    [PluginAuthor("MZLuzifer")]
+    [PluginName("Git Sync")]
     public partial class GithubSyncPlugin : IPlugin
     {
         // Plugin metadata for SimHub UI
+
         public string PluginName => "Git Sync";
         public string Author => "MZLuzifer";
         public string Description => "Plugin to sync your Dashboard with GitHub. It's possible to collaborate now with others on the same dashboard.";

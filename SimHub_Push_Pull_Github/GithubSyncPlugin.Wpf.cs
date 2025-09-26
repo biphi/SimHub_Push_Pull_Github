@@ -45,9 +45,9 @@ namespace SimHub_Push_Pull_Github
             private readonly ObservableCollection<DashboardRow> _localRows = new ObservableCollection<DashboardRow>();
             private readonly ObservableCollection<DashboardRow> _remoteRows = new ObservableCollection<DashboardRow>();
             private bool _isBusy;
-            private TextBlock _statusText;
-            private Panel _actionsButtonsPanel;
-            private ProgressBar _progressBar;
+            private TextBlock _statusText = new TextBlock();
+            private Panel _actionsButtonsPanel = new StackPanel();
+            private ProgressBar _progressBar = new ProgressBar();
             private TextBlock _remoteRepoLinkContainer;
             private Hyperlink _remoteRepoHyperlink;
 
