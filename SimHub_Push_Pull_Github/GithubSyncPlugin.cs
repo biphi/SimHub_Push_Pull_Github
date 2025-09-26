@@ -12,6 +12,11 @@ namespace SimHub_Push_Pull_Github
 {
     public partial class GithubSyncPlugin : IPlugin
     {
+        // Plugin metadata for SimHub UI
+        public string PluginName => "Git Sync";
+        public string Author => "MZLuzifer";
+        public string Description => "Plugin to sync your Dashboard with GitHub. It's possible to collaborate now with others on the same dashboard.";
+
         public PluginManager PluginManager { get; set; } // implement interface with public setter
         private static Version _assemblyVersion;
         private static string _computedVersion;
@@ -241,7 +246,7 @@ namespace SimHub_Push_Pull_Github
         public void End(PluginManager pluginManager) { PluginLogger.Info("Plugin End called"); }
         public void GitPull() { var branch = string.IsNullOrWhiteSpace(_settings?.Branch) ? "master" : _settings.Branch; PluginLogger.Info($"Pull requested for origin/{branch}"); var ok = _sync?.Pull("origin", branch) ?? false; PluginLogger.Info($"Pull result: {ok}"); }
         public void GitPush() { var branch = string.IsNullOrWhiteSpace(_settings?.Branch) ? "master" : _settings.Branch; PluginLogger.Info($"Push requested for origin/{branch}"); var ok = _sync?.Push("origin", branch) ?? false; PluginLogger.Info($"Push result: {ok}"); }
-        public void GitCommitAll() { var msg = $"Update from SimHub at {DateTime.Now:yyyy-MM-dd HH:mm:ss}"; PluginLogger.Info($"Commit requested: '{msg}'"); bool ok; var selected = _settings?.SelectedDashboards ?? new List<string>(); if (selected.Count > 0) { PluginLogger.Info($"Committing selected dashboards: {string.Join(", ", selected)}"); ok = _sync?.CommitSelected(msg, selected) ?? false; } else { ok = _sync?.CommitAll(msg) ?? false; } PluginLogger.Info($"Commit result: {ok}"); }
+        public void GitCommitAll() { var msg = $"Update from SimHub at {DateTime.Now:yyyy-MM-dd HH:mm:ss}"; PluginLogger.Info($"Commit requested: '{msg}'"); bool ok; var selected = _settings?.SelectedDashboards ?? new System.Collections.Generic.List<string>(); if (selected.Count > 0) { PluginLogger.Info($"Committing selected dashboards: {string.Join(", ", selected)}"); ok = _sync?.CommitSelected(msg, selected) ?? false; } else { ok = _sync?.CommitAll(msg) ?? false; } PluginLogger.Info($"Commit result: {ok}"); }
         public void GitTagAuto() { try { PluginLogger.Info("Auto tag requested"); var tag = _sync?.CreateTagAndPush("v"); if (string.IsNullOrEmpty(tag)) PluginLogger.Warn("Auto tag creation failed"); else PluginLogger.Info($"Created and pushed tag {tag}"); } catch (Exception ex) { PluginLogger.Error("GitTagAuto failed", ex); } }
 
         public void SaveSettings(string remoteUrl, string branch, bool autoPullOnStart) => SaveSettings(remoteUrl, branch, autoPullOnStart, null, null, null, null);

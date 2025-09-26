@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 // Allgemeine Informationen über eine Assembly werden über die folgenden
 // Attribute gesteuert. Ändern Sie diese Attributwerte, um die Informationen zu ändern,
 // die einer Assembly zugeordnet sind.
-[assembly: AssemblyTitle("SimHub_Push_Pull_Github")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Git Sync")]
+[assembly: AssemblyDescription("Plugin to sync your Dashboard with GitHub. It's possible to collaborate now with others on the same dashboard.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("SimHub_Push_Pull_Github")]
+[assembly: AssemblyCompany("MZLuzifer")]
+[assembly: AssemblyProduct("Git Sync")]
 [assembly: AssemblyCopyright("Copyright ©  2025")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
