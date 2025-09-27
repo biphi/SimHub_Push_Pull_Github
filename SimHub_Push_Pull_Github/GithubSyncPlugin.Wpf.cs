@@ -15,6 +15,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects; // Für Schatteneffekt
+using System.Windows.Media.Imaging; // Für PayPal-Bild
 namespace SimHub_Push_Pull_Github
 {
     public partial class GithubSyncPlugin : IWPFSettingsV2
@@ -408,6 +409,34 @@ namespace SimHub_Push_Pull_Github
                 linkTree.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } e.Handled = true; };
                 linkTreeText.Inlines.Add(linkTree);
                 supportStack.Children.Add(linkTreeText);
+
+                // PayPal Donate Button (large graphic with PayPal Logo)
+                var donateLabel = new TextBlock { Text = "Unterstütze mich via PayPal:", Margin = new Thickness(0, 12, 0, 6), FontWeight = FontWeights.SemiBold };
+                supportStack.Children.Add(donateLabel);
+
+                var paypalButton = new Button
+                {
+                    Background = Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Cursor = Cursors.Hand,
+                    ToolTip = "paypal.me/PhilippBrunner",
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(0),
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                var paypalImage = new Image
+                {
+                    Source = new BitmapImage(new Uri("https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif")),
+                    Stretch = Stretch.None,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                paypalButton.Content = paypalImage;
+                paypalButton.Click += (s, e) =>
+                {
+                    try { Process.Start(new ProcessStartInfo("https://paypal.me/PhilippBrunner") { UseShellExecute = true }); } catch { }
+                };
+                supportStack.Children.Add(paypalButton);
+
                 supportStack.Children.Add(new TextBlock { Margin = new Thickness(0, 10, 0, 0), Text = "Thank you for your support! Greeting MZLuzifer ??", TextWrapping = TextWrapping.Wrap });
                 return new TabItem { Header = "Support", Content = new ScrollViewer { Content = supportStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
             }
